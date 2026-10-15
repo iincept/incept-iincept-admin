@@ -14,13 +14,17 @@ import {
   Eye,
   EyeOff,
   Star,
-  Home
+  Home,
+  Monitor,
+  Smartphone
 } from 'lucide-react';
 
 export default function HeroBanners() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(null);
   const [uploadingIndex, setUploadingIndex] = useState(null);
+  const [previewMode, setPreviewMode] = useState('desktop');
+  const [selectedPreviewIndex, setSelectedPreviewIndex] = useState(0);
 
   const [siteForm, setSiteForm] = useState({
     homeHeroBadge: 'Apple Authorised Resellers across India',
@@ -87,7 +91,16 @@ export default function HeroBanners() {
           heroSlides: response.data.heroSlides && response.data.heroSlides.length > 0 
             ? response.data.heroSlides.map(s => ({ 
                 ...s, 
+                badge: s.badge || 'APPLE AUTHORISED RESELLERS ACROSS INDIA',
                 isActive: s.isActive !== false,
+                hideText: s.hideText !== false,
+                imageFit: s.imageFit || 'cover',
+                focalPosition: s.focalPosition || 'center',
+                textAlignment: s.textAlignment || 'left',
+                overlayStyle: s.overlayStyle || 'gradient',
+                mobileImage: s.mobileImage || '',
+                secondaryButtonText: s.secondaryButtonText || 'Find Nearest Store',
+                secondaryButtonLink: s.secondaryButtonLink || '#store-locator',
                 titleBold: s.titleBold || '',
                 titleNormal: s.titleNormal || '',
                 stat1Bold: s.stat1Bold || 'GST invoicing',
@@ -99,38 +112,30 @@ export default function HeroBanners() {
               }))
             : [
                 {
+                  badge: "APPLE AUTHORISED RESELLERS ACROSS INDIA",
                   title: response.data.heroTitle1 || "Apple devices for your business, sourced right, delivered anywhere in India.",
                   titleBold: "Apple devices for your business,",
                   titleNormal: "sourced right, delivered anywhere in India.",
                   subtitle: response.data.heroSubtitle1 || "Bulk pricing, GST invoicing, dedicated account support and consolidated billing.",
                   buttonText: response.data.heroButtonText1 || "Request Bulk Quote →",
                   buttonLink: "#procurement-section",
+                  secondaryButtonText: "Find Nearest Store",
+                  secondaryButtonLink: "#store-locator",
                   image: "",
+                  mobileImage: "",
+                  imageFit: "cover",
+                  focalPosition: "center",
+                  textAlignment: "left",
+                  overlayStyle: "gradient",
                   bgStyle: "slide-dark",
                   isActive: true,
+                  hideText: true,
                   stat1Bold: "GST invoicing",
                   stat1Normal: "on every order",
                   stat2Bold: "Volume pricing",
                   stat2Normal: "on bulk orders",
                   stat3Bold: "Pan-India",
                   stat3Normal: "delivery & tracking",
-                },
-                {
-                  title: response.data.heroTitle2 || "The latest Apple lineup, in stock and ready to ship today.",
-                  titleBold: "The latest Apple lineup,",
-                  titleNormal: "in stock and ready to ship today.",
-                  subtitle: response.data.heroSubtitle2 || "From the newest iPhone 17 series to our best-selling MacBooks and AirPods.",
-                  buttonText: response.data.heroButtonText2 || "Browse Catalogue →",
-                  buttonLink: "#apple-categories",
-                  image: "",
-                  bgStyle: "slide-light",
-                  isActive: true,
-                  stat1Bold: "New launches",
-                  stat1Normal: "every month",
-                  stat2Bold: "Curated",
-                  stat2Normal: "best-sellers",
-                  stat3Bold: "Fast dispatch,",
-                  stat3Normal: "2–4 days",
                 }
               ],
         });
@@ -160,27 +165,49 @@ export default function HeroBanners() {
       heroSlides: [
         ...prev.heroSlides,
         {
+          badge: "APPLE AUTHORISED RESELLERS ACROSS INDIA",
           title: "New Promotional Banner Title",
+          titleBold: "New Promotional Banner",
+          titleNormal: "Title",
           subtitle: "Add your banner description or promotional offer text here.",
           buttonText: "Explore Now →",
           buttonLink: "/shop",
+          secondaryButtonText: "Find Nearest Store",
+          secondaryButtonLink: "#store-locator",
           image: "",
-          bgStyle: "slide-dark",
-          isActive: true
+          mobileImage: "",
+          imageFit: "cover",
+          focalPosition: "center",
+          textAlignment: "left",
+          overlayStyle: "gradient",
+          bgStyle: "slide-light",
+          isActive: true,
+          hideText: true
         }
       ]
     }));
   };
 
-  const handleRemoveSlide = (index) => {
+  const handleRemoveSlide = async (index) => {
     if (siteForm.heroSlides.length <= 1) {
       alert("At least 1 hero banner is required.");
       return;
     }
+    if (!window.confirm("Are you sure you want to remove this banner slide?")) {
+      return;
+    }
+    const updatedSlides = siteForm.heroSlides.filter((_, i) => i !== index);
     setSiteForm((prev) => ({
       ...prev,
-      heroSlides: prev.heroSlides.filter((_, i) => i !== index)
+      heroSlides: updatedSlides
     }));
+    try {
+      await axiosClient.put('/settings', { ...siteForm, heroSlides: updatedSlides });
+      notifyAdminChange('settings', { action: 'update_banners' });
+      showSuccessMessage('Banner slide removed successfully!');
+    } catch (err) {
+      console.error('Failed to auto-save slide deletion:', err);
+    }
   };
 
   const handleSlideChange = (index, field, value) => {
@@ -281,30 +308,99 @@ export default function HeroBanners() {
     });
   };
 
-  const handleBannerImageUpload = async (index, e) => {
+  const handleBannerImageUpload = async (index, e, fieldName = 'image') => {
     const file = e.target.files[0];
     if (!file) return;
 
-    setUploadingIndex(index);
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload a valid image file (JPEG, PNG, WebP, SVG).');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size exceeds the 10MB limit. Please upload a smaller image.');
+      return;
+    }
+
+    setUploadingIndex(`${index}-${fieldName}`);
     const formData = new FormData();
     formData.append('image', file);
 
     try {
       const response = await axiosClient.post('/upload/single', formData);
-      if (response.data && response.data.url) {
-        handleSlideChange(index, 'image', response.data.url);
-        showSuccessMessage('Banner image uploaded successfully!');
+      const uploadedUrl = response.data?.url || response.data?.imageUrl;
+      if (uploadedUrl) {
+        const updatedSlides = [...siteForm.heroSlides];
+        updatedSlides[index] = {
+          ...updatedSlides[index],
+          [fieldName]: uploadedUrl,
+          hideText: true,
+          imageFit: 'cover'
+        };
+
+        const updatedForm = {
+          ...siteForm,
+          heroSlides: updatedSlides,
+          ...(index === 0 && fieldName === 'image' ? { homeHeroImage: uploadedUrl } : {})
+        };
+
+        setSiteForm(updatedForm);
+
+        // Auto-save immediately to database so storefront updates live instantly
+        await axiosClient.put('/settings', updatedForm);
+        notifyAdminChange('settings', { action: 'update_banner_image' });
+        showSuccessMessage(`${fieldName === 'mobileImage' ? 'Mobile' : 'Desktop'} banner image updated & published live!`);
       }
     } catch (err) {
       console.warn('Server upload fallback triggered:', err);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        handleSlideChange(index, 'image', reader.result);
-        showSuccessMessage('Banner image loaded!');
+      reader.onloadend = async () => {
+        const base64Url = reader.result;
+        const updatedSlides = [...siteForm.heroSlides];
+        updatedSlides[index] = {
+          ...updatedSlides[index],
+          [fieldName]: base64Url,
+          hideText: true,
+          imageFit: 'cover'
+        };
+        const updatedForm = {
+          ...siteForm,
+          heroSlides: updatedSlides,
+          ...(index === 0 && fieldName === 'image' ? { homeHeroImage: base64Url } : {})
+        };
+        setSiteForm(updatedForm);
+        try {
+          await axiosClient.put('/settings', updatedForm);
+          notifyAdminChange('settings', { action: 'update_banner_image' });
+          showSuccessMessage(`${fieldName === 'mobileImage' ? 'Mobile' : 'Desktop'} banner image loaded & saved live!`);
+        } catch (saveErr) {
+          console.error('Auto-save fallback failed:', saveErr);
+        }
       };
       reader.readAsDataURL(file);
     } finally {
       setUploadingIndex(null);
+    }
+  };
+
+  const handleRemoveSlideImage = async (index, fieldName = 'image') => {
+    const updatedSlides = [...siteForm.heroSlides];
+    updatedSlides[index] = {
+      ...updatedSlides[index],
+      [fieldName]: ''
+    };
+    const updatedForm = {
+      ...siteForm,
+      heroSlides: updatedSlides,
+      ...(index === 0 && fieldName === 'image' ? { homeHeroImage: '' } : {})
+    };
+    setSiteForm(updatedForm);
+    try {
+      await axiosClient.put('/settings', updatedForm);
+      notifyAdminChange('settings', { action: 'remove_banner_image' });
+      showSuccessMessage('Banner image removed & published live!');
+    } catch (err) {
+      console.error('Failed to auto-save image removal:', err);
     }
   };
 
@@ -439,7 +535,23 @@ export default function HeroBanners() {
                   <input
                     type="text"
                     value={siteForm.homeHeroImage || ''}
-                    onChange={(e) => setSiteForm({ ...siteForm, homeHeroImage: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const updatedSlides = [...siteForm.heroSlides];
+                      if (updatedSlides.length > 0) {
+                        updatedSlides[0] = { ...updatedSlides[0], image: val, hideText: true, imageFit: 'cover' };
+                      }
+                      setSiteForm({ ...siteForm, homeHeroImage: val, heroSlides: updatedSlides });
+                    }}
+                    onBlur={async () => {
+                      try {
+                        await axiosClient.put('/settings', siteForm);
+                        notifyAdminChange('settings', { action: 'update_banner_image' });
+                        showSuccessMessage('Main banner image URL saved live!');
+                      } catch (err) {
+                        console.error('Auto-save on blur failed:', err);
+                      }
+                    }}
                     placeholder="e.g. /iphone_category_uploaded.jpg or https://..."
                     className="flex-1 px-3.5 py-2.5 rounded-xl border border-zinc-700 bg-zinc-800 text-white focus:border-[#0071e3] outline-none text-xs font-mono"
                   />
@@ -457,12 +569,42 @@ export default function HeroBanners() {
                         formData.append('image', file);
                         try {
                           const res = await axiosClient.post('/upload/single', formData);
-                          if (res.data?.url) {
-                            setSiteForm(prev => ({ ...prev, homeHeroImage: res.data.url }));
+                          const uploadedUrl = res.data?.url || res.data?.imageUrl;
+                          if (uploadedUrl) {
+                            const updatedSlides = [...siteForm.heroSlides];
+                            if (updatedSlides.length > 0) {
+                              updatedSlides[0] = { ...updatedSlides[0], image: uploadedUrl, hideText: true, imageFit: 'cover' };
+                            }
+                            const updatedForm = {
+                              ...siteForm,
+                              homeHeroImage: uploadedUrl,
+                              heroSlides: updatedSlides
+                            };
+                            setSiteForm(updatedForm);
+                            await axiosClient.put('/settings', updatedForm);
+                            notifyAdminChange('settings', { action: 'update_banner_image' });
+                            showSuccessMessage('Homepage hero banner image updated & published live!');
                           }
                         } catch (err) {
                           const reader = new FileReader();
-                          reader.onloadend = () => setSiteForm(prev => ({ ...prev, homeHeroImage: reader.result }));
+                          reader.onloadend = async () => {
+                            const base64 = reader.result;
+                            const updatedSlides = [...siteForm.heroSlides];
+                            if (updatedSlides.length > 0) {
+                              updatedSlides[0] = { ...updatedSlides[0], image: base64, hideText: true, imageFit: 'cover' };
+                            }
+                            const updatedForm = {
+                              ...siteForm,
+                              homeHeroImage: base64,
+                              heroSlides: updatedSlides
+                            };
+                            setSiteForm(updatedForm);
+                            try {
+                              await axiosClient.put('/settings', updatedForm);
+                              notifyAdminChange('settings', { action: 'update_banner_image' });
+                              showSuccessMessage('Homepage hero banner image loaded & saved live!');
+                            } catch (e) {}
+                          };
                           reader.readAsDataURL(file);
                         }
                       }}
@@ -665,20 +807,231 @@ export default function HeroBanners() {
           <hr className="border-zinc-100" />
 
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <span className="text-[10px] text-zinc-400 uppercase font-extrabold tracking-widest block">HOMEPAGE HERO SLIDES ({siteForm.heroSlides.length})</span>
                 <h3 className="text-base font-bold text-zinc-900 mt-0.5">Manage All Active & Hidden Slides</h3>
               </div>
+              
+              {/* Device Preview Mode Selector */}
+              <div className="flex items-center gap-2 bg-zinc-100 p-1 rounded-xl border border-zinc-200">
+                <button
+                  type="button"
+                  onClick={() => setPreviewMode('desktop')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    previewMode === 'desktop'
+                      ? 'bg-white text-zinc-900 shadow-xs'
+                      : 'text-zinc-500 hover:text-zinc-900'
+                  }`}
+                >
+                  <Monitor className="h-3.5 w-3.5" />
+                  Desktop (1920×520)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewMode('mobile')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    previewMode === 'mobile'
+                      ? 'bg-white text-zinc-900 shadow-xs'
+                      : 'text-zinc-500 hover:text-zinc-900'
+                  }`}
+                >
+                  <Smartphone className="h-3.5 w-3.5" />
+                  Mobile (390px)
+                </button>
+              </div>
             </div>
+
+            {/* REAL-TIME INTERACTIVE BANNER PREVIEW */}
+            {siteForm.heroSlides.length > 0 && (() => {
+              const safeIndex = Math.min(selectedPreviewIndex, siteForm.heroSlides.length - 1);
+              const previewSlide = siteForm.heroSlides[safeIndex] || siteForm.heroSlides[0];
+              const fitCls = previewSlide.imageFit === 'cover' ? 'object-cover' : 'object-contain';
+              const focalCls = previewSlide.focalPosition === 'center'
+                ? 'object-center'
+                : previewSlide.focalPosition === 'left'
+                ? 'object-left'
+                : 'object-right';
+              const imgUrl = previewMode === 'mobile' && previewSlide.mobileImage 
+                ? previewSlide.mobileImage 
+                : previewSlide.image;
+
+              return (
+                <div className="bg-zinc-900 rounded-3xl p-4 sm:p-6 text-white space-y-4 shadow-xl border border-zinc-800">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span className="text-xs font-bold tracking-wider uppercase text-zinc-300">Live Simulator Preview</span>
+                      <span className="text-[11px] text-zinc-400">
+                        (Viewing Slide #{safeIndex + 1}: {previewSlide.titleBold || previewSlide.title || 'Untitled'})
+                      </span>
+                    </div>
+
+                    {/* Slide Selector Tabs */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {siteForm.heroSlides.map((s, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setSelectedPreviewIndex(idx)}
+                          className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                            safeIndex === idx
+                              ? 'bg-[#0071e3] text-white'
+                              : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                          }`}
+                        >
+                          Slide {idx + 1}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Simulator Canvas Frame */}
+                  <div className="flex justify-center bg-zinc-950/70 p-3 sm:p-5 rounded-2xl border border-zinc-800/80 overflow-hidden">
+                    {previewMode === 'desktop' ? (
+                      /* DESKTOP 1920×520 CANVAS */
+                      <div className="w-full max-w-5xl aspect-[1920/520] min-h-[220px] max-h-[360px] rounded-2xl bg-gradient-to-br from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] text-zinc-900 relative overflow-hidden shadow-md flex items-center border border-zinc-200/80">
+                        {previewSlide.hideText !== false ? (
+                          /* Image-only desktop banner */
+                          <div className="w-full h-full relative flex items-center justify-center">
+                            {imgUrl ? (
+                              <img
+                                src={imgUrl}
+                                alt="Banner"
+                                className={`w-full h-full ${fitCls} ${focalCls}`}
+                              />
+                            ) : (
+                              <div className="text-center p-6 text-zinc-400">
+                                <ImageIcon className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                                <p className="text-xs font-bold">No image uploaded for this slide</p>
+                              </div>
+                            )}
+                            <div className="absolute top-3 left-3 bg-zinc-900/80 text-white text-[10px] font-bold px-2.5 py-1 rounded-md backdrop-blur-sm">
+                              Image Only Mode (Text overlay hidden)
+                            </div>
+                          </div>
+                        ) : (
+                          /* Split desktop banner: Text Left, Product Right */
+                          <div className="w-full h-full grid grid-cols-12 items-center px-6 sm:px-10 lg:px-12 py-4 relative z-10">
+                            <div className="col-span-7 sm:col-span-6 space-y-2 text-left z-20">
+                              {previewSlide.badge && (
+                                <span className="inline-block text-[10px] sm:text-xs font-bold tracking-wider text-[#0071e3] uppercase">
+                                  {previewSlide.badge}
+                                </span>
+                              )}
+                              <h2 className="text-base sm:text-xl lg:text-2xl font-extrabold text-zinc-900 tracking-tight leading-tight line-clamp-2">
+                                <span className="font-extrabold">{previewSlide.titleBold || previewSlide.title || 'Apple for Business'}</span>{' '}
+                                <span className="font-medium text-zinc-600">{previewSlide.titleNormal || ''}</span>
+                              </h2>
+                              <p className="text-[11px] sm:text-xs text-zinc-600 line-clamp-2 max-w-md">
+                                {previewSlide.subtitle || 'Discover premium genuine Apple hardware with official warranty and GST invoicing.'}
+                              </p>
+                              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                                {previewSlide.buttonText && (
+                                  <span className="bg-[#0071e3] text-white text-[10px] sm:text-xs font-bold px-3 sm:px-4 py-1.5 rounded-full shadow-xs inline-block">
+                                    {previewSlide.buttonText}
+                                  </span>
+                                )}
+                                {previewSlide.secondaryButtonText && (
+                                  <span className="bg-white/90 text-zinc-800 border border-zinc-300 text-[10px] sm:text-xs font-bold px-3 sm:px-4 py-1.5 rounded-full inline-block">
+                                    {previewSlide.secondaryButtonText}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="col-span-5 sm:col-span-6 h-full flex items-center justify-end relative">
+                              {imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt="Product"
+                                  className={`w-full h-full max-h-[220px] sm:max-h-[300px] ${fitCls} ${focalCls} drop-shadow-xl`}
+                                />
+                              ) : (
+                                <div className="w-48 h-32 border-2 border-dashed border-zinc-300 rounded-xl flex items-center justify-center text-zinc-400 text-xs font-semibold">
+                                  Product Image Area
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        <div className="absolute bottom-2.5 right-3 bg-zinc-900/60 text-white text-[9px] font-mono px-2 py-0.5 rounded backdrop-blur-xs">
+                          1920 × 520 Ratio
+                        </div>
+                      </div>
+                    ) : (
+                      /* MOBILE 390px PHONE CANVAS */
+                      <div className="w-[340px] sm:w-[380px] min-h-[460px] rounded-[32px] border-4 border-zinc-700 bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] text-zinc-900 relative overflow-hidden shadow-2xl flex flex-col justify-between p-5">
+                        <div className="w-20 h-4 bg-zinc-800 rounded-full mx-auto mb-2"></div>
+                        
+                        {previewSlide.hideText !== false ? (
+                          <div className="flex-1 flex items-center justify-center relative">
+                            {(previewSlide.mobileImage || imgUrl) ? (
+                              <img
+                                src={previewSlide.mobileImage || imgUrl}
+                                alt="Banner"
+                                className="w-full h-full max-h-[380px] object-contain drop-shadow-lg"
+                              />
+                            ) : (
+                              <p className="text-zinc-400 text-xs">No image uploaded</p>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="space-y-2 text-center pt-2">
+                              {previewSlide.badge && (
+                                <span className="inline-block text-[10px] font-bold tracking-wider text-[#0071e3] uppercase">
+                                  {previewSlide.badge}
+                                </span>
+                              )}
+                              <h2 className="text-lg font-extrabold text-zinc-900 leading-tight">
+                                {previewSlide.titleBold || previewSlide.title || 'Apple for Business'}
+                              </h2>
+                              <p className="text-xs text-zinc-600 line-clamp-2">
+                                {previewSlide.subtitle || 'Discover premium genuine Apple hardware.'}
+                              </p>
+                              <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
+                                {previewSlide.buttonText && (
+                                  <span className="bg-[#0071e3] text-white text-[11px] font-bold px-3 py-1.5 rounded-full shadow-xs inline-block">
+                                    {previewSlide.buttonText}
+                                  </span>
+                                )}
+                                {previewSlide.secondaryButtonText && (
+                                  <span className="bg-white text-zinc-800 border border-zinc-300 text-[11px] font-bold px-3 py-1.5 rounded-full inline-block">
+                                    {previewSlide.secondaryButtonText}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex-1 flex items-center justify-center py-4">
+                              {imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt="Product"
+                                  className="w-full max-h-[200px] object-contain drop-shadow-md"
+                                />
+                              ) : (
+                                <div className="w-36 h-28 border border-dashed border-zinc-300 rounded-xl flex items-center justify-center text-zinc-400 text-[11px]">
+                                  Mobile Product
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+                        <div className="w-24 h-1 bg-zinc-300 rounded-full mx-auto"></div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="space-y-4">
               {siteForm.heroSlides.map((slide, index) => (
                 <div 
                   key={index}
-                  className={`p-5 border rounded-2xl space-y-4 relative transition-all ${
+                  className={`p-5 sm:p-6 border rounded-2xl space-y-5 relative transition-all ${
                     slide.isActive !== false 
-                      ? 'bg-zinc-50 border-zinc-200 hover:border-zinc-300' 
+                      ? 'bg-zinc-50 border-zinc-200 hover:border-zinc-300 shadow-2xs' 
                       : 'bg-zinc-100/70 border-zinc-250 opacity-75'
                   }`}
                 >
@@ -703,9 +1056,44 @@ export default function HeroBanners() {
                           <ImageIcon className="h-3 w-3" /> Image Banner
                         </span>
                       )}
+
+                      {slide.hideText && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-100 border border-purple-300 px-2 py-0.5 rounded-md">
+                          Text Hidden
+                        </span>
+                      )}
                     </div>
                     
                     <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPreviewIndex(index)}
+                        className="flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                        title="Preview this slide in simulator above"
+                      >
+                        <Eye className="h-3 w-3" /> Preview
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setLoading(true);
+                          try {
+                            await axiosClient.put('/settings', siteForm);
+                            notifyAdminChange('settings', { action: 'update_banners' });
+                            showSuccessMessage(`Slide #${index + 1} published live successfully!`);
+                          } catch (err) {
+                            alert('Failed to save settings: ' + (err.response?.data?.message || err.message));
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                        className="flex items-center gap-1 text-[11px] font-bold text-white bg-[#0071e3] hover:bg-[#005bb5] px-2.5 py-1 rounded-lg transition-all cursor-pointer shadow-xs border-0"
+                        title="Save & publish this slide live right now"
+                      >
+                        <Check className="h-3 w-3" /> Save Slide
+                      </button>
+
                       {index > 0 && (
                         <button
                           type="button"
@@ -720,6 +1108,30 @@ export default function HeroBanners() {
 
                       <button
                         type="button"
+                        onClick={async () => {
+                          const newHide = slide.hideText === false ? true : false;
+                          handleSlideChange(index, 'hideText', newHide);
+                          const updatedSlides = [...siteForm.heroSlides];
+                          updatedSlides[index] = { ...updatedSlides[index], hideText: newHide };
+                          const updatedForm = { ...siteForm, heroSlides: updatedSlides };
+                          try {
+                            await axiosClient.put('/settings', updatedForm);
+                            notifyAdminChange('settings', { action: 'update_banners' });
+                            showSuccessMessage(newHide ? 'Text hidden — Image-only mode active!' : 'Text overlay enabled.');
+                          } catch (err) {}
+                        }}
+                        className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                          slide.hideText !== false 
+                            ? 'text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-300' 
+                            : 'text-zinc-700 bg-white hover:bg-zinc-100 border-zinc-250'
+                        }`}
+                        title="Toggle Text Overlay on Live Banner"
+                      >
+                        {slide.hideText !== false ? 'Text Hidden (Image Banner)' : 'Hide Text'}
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => handleToggleActive(index)}
                         className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
                           slide.isActive !== false 
@@ -730,12 +1142,12 @@ export default function HeroBanners() {
                         {slide.isActive !== false ? (
                           <>
                             <EyeOff className="h-3.5 w-3.5 text-zinc-500" />
-                            Hide
+                            Hide Slide
                           </>
                         ) : (
                           <>
                             <Eye className="h-3.5 w-3.5 text-emerald-600" />
-                            Unhide
+                            Unhide Slide
                           </>
                         )}
                       </button>
@@ -744,7 +1156,7 @@ export default function HeroBanners() {
                         type="button"
                         disabled={index === 0}
                         onClick={() => handleMoveSlide(index, 'up')}
-                        className="p-1 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 disabled:opacity-40 cursor-pointer border-0 text-zinc-600"
+                        className="p-1 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 disabled:opacity-40 cursor-pointer text-zinc-600"
                         title="Move Up"
                       >
                         <ArrowUp className="h-3.5 w-3.5" />
@@ -753,7 +1165,7 @@ export default function HeroBanners() {
                         type="button"
                         disabled={index === siteForm.heroSlides.length - 1}
                         onClick={() => handleMoveSlide(index, 'down')}
-                        className="p-1 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 disabled:opacity-40 cursor-pointer border-0 text-zinc-600"
+                        className="p-1 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 disabled:opacity-40 cursor-pointer text-zinc-600"
                         title="Move Down"
                       >
                         <ArrowDown className="h-3.5 w-3.5" />
@@ -770,6 +1182,48 @@ export default function HeroBanners() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Hide Text on Banner Toggle Switch */}
+                    <div className="md:col-span-2 flex items-center justify-between p-3.5 rounded-xl border border-zinc-200 bg-white shadow-2xs">
+                      <div>
+                        <label className="text-xs font-bold text-zinc-900 block cursor-pointer">
+                          Hide Text Overlay on Banner (Image-Only Banner Mode)
+                        </label>
+                        <p className="text-[11px] text-zinc-500 mt-0.5">
+                          Turn this ON if your uploaded graphic already contains typography and you want a pure visual billboard.
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={slide.hideText !== false}
+                        onChange={async (e) => {
+                          const val = e.target.checked;
+                          handleSlideChange(index, 'hideText', val);
+                          const updatedSlides = [...siteForm.heroSlides];
+                          updatedSlides[index] = { ...updatedSlides[index], hideText: val };
+                          const updatedForm = { ...siteForm, heroSlides: updatedSlides };
+                          try {
+                            await axiosClient.put('/settings', updatedForm);
+                            notifyAdminChange('settings', { action: 'update_banners' });
+                          } catch (err) {}
+                        }}
+                        className="w-5 h-5 text-[#0071e3] rounded cursor-pointer accent-[#0071e3]"
+                      />
+                    </div>
+
+                    {/* Eyebrow Badge Text */}
+                    <div className="md:col-span-2 space-y-1">
+                      <label className="block text-[10px] font-bold text-blue-700 uppercase tracking-wider">
+                        Eyebrow / Badge Text (Small Blue Header)
+                      </label>
+                      <input
+                        type="text"
+                        value={slide.badge || ''}
+                        onChange={(e) => handleSlideChange(index, 'badge', e.target.value)}
+                        placeholder="e.g. APPLE AUTHORISED RESELLERS ACROSS INDIA"
+                        className="w-full px-3 py-2 bg-white rounded-lg border border-zinc-200 text-xs font-semibold focus:border-[#0071e3] outline-none text-[#0071e3]"
+                      />
+                    </div>
+
                     {/* Separate Bold Title vs Normal Title Fields */}
                     <div className="space-y-1">
                       <label className="block text-[10px] font-bold text-zinc-700 uppercase tracking-wider">Heading Bold Portion</label>
@@ -809,8 +1263,7 @@ export default function HeroBanners() {
                       <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Full Heading Message</label>
                       <input
                         type="text"
-                        required
-                        value={slide.title}
+                        value={slide.title || ''}
                         onChange={(e) => handleSlideChange(index, 'title', e.target.value)}
                         placeholder="e.g. The latest Apple lineup, in stock today."
                         className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-zinc-200 text-sm font-semibold focus:border-[#0071e3] outline-none"
@@ -821,101 +1274,101 @@ export default function HeroBanners() {
                       <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Subtitle / Supporting Text</label>
                       <textarea
                         rows={2}
-                        value={slide.subtitle}
+                        value={slide.subtitle || ''}
                         onChange={(e) => handleSlideChange(index, 'subtitle', e.target.value)}
                         placeholder="Brief description of the banner slide..."
                         className="w-full px-3.5 py-2 bg-white rounded-xl border border-zinc-200 text-xs focus:border-[#0071e3] outline-none resize-none"
                       />
                     </div>
 
-                    {/* Stat Badges Highlights (Separated Bold & Normal) */}
-                    <div className="md:col-span-2 bg-white p-3.5 rounded-xl border border-zinc-200 space-y-3">
-                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">Slide Highlights / Bullet Badges (Bold + Normal Text)</span>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="space-y-1">
-                          <label className="block text-[9px] font-extrabold text-zinc-600 uppercase">Badge 1: Bold Text</label>
-                          <input
-                            type="text"
-                            value={slide.stat1Bold || ''}
-                            onChange={(e) => handleSlideChange(index, 'stat1Bold', e.target.value)}
-                            placeholder="e.g. GST invoicing"
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold"
-                          />
-                          <label className="block text-[9px] font-semibold text-zinc-500 uppercase mt-1">Badge 1: Normal Text</label>
-                          <input
-                            type="text"
-                            value={slide.stat1Normal || ''}
-                            onChange={(e) => handleSlideChange(index, 'stat1Normal', e.target.value)}
-                            placeholder="e.g. on every order"
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-normal"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="block text-[9px] font-extrabold text-zinc-600 uppercase">Badge 2: Bold Text</label>
-                          <input
-                            type="text"
-                            value={slide.stat2Bold || ''}
-                            onChange={(e) => handleSlideChange(index, 'stat2Bold', e.target.value)}
-                            placeholder="e.g. Volume pricing"
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold"
-                          />
-                          <label className="block text-[9px] font-semibold text-zinc-500 uppercase mt-1">Badge 2: Normal Text</label>
-                          <input
-                            type="text"
-                            value={slide.stat2Normal || ''}
-                            onChange={(e) => handleSlideChange(index, 'stat2Normal', e.target.value)}
-                            placeholder="e.g. on bulk orders"
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-normal"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="block text-[9px] font-extrabold text-zinc-600 uppercase">Badge 3: Bold Text</label>
-                          <input
-                            type="text"
-                            value={slide.stat3Bold || ''}
-                            onChange={(e) => handleSlideChange(index, 'stat3Bold', e.target.value)}
-                            placeholder="e.g. Pan-India"
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold"
-                          />
-                          <label className="block text-[9px] font-semibold text-zinc-500 uppercase mt-1">Badge 3: Normal Text</label>
-                          <input
-                            type="text"
-                            value={slide.stat3Normal || ''}
-                            onChange={(e) => handleSlideChange(index, 'stat3Normal', e.target.value)}
-                            placeholder="e.g. delivery & tracking"
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-normal"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
+                    {/* CTA BUTTON 1 (Primary) */}
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Button Text (CTA)</label>
+                      <label className="block text-[10px] font-bold text-zinc-700 uppercase tracking-wider">CTA Button 1 Text (Primary Pill)</label>
                       <input
                         type="text"
-                        value={slide.buttonText}
+                        value={slide.buttonText || ''}
                         onChange={(e) => handleSlideChange(index, 'buttonText', e.target.value)}
                         placeholder="e.g. Browse Catalogue →"
-                        className="w-full px-3 py-2 bg-white rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none"
+                        className="w-full px-3 py-2 bg-white rounded-lg border border-zinc-200 text-xs font-semibold focus:border-[#0071e3] outline-none"
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Button Link (URL / Anchor)</label>
+                      <label className="block text-[10px] font-bold text-zinc-700 uppercase tracking-wider">CTA Button 1 Link (URL / Anchor)</label>
                       <input
                         type="text"
-                        value={slide.buttonLink}
+                        value={slide.buttonLink || ''}
                         onChange={(e) => handleSlideChange(index, 'buttonLink', e.target.value)}
-                        placeholder="e.g. /shop or #apple-categories"
+                        placeholder="e.g. /shop or #categories"
                         className="w-full px-3 py-2 bg-white rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none font-mono"
                       />
                     </div>
 
+                    {/* CTA BUTTON 2 (Secondary) */}
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Background Theme Style</label>
+                      <label className="block text-[10px] font-bold text-zinc-700 uppercase tracking-wider">CTA Button 2 Text (Secondary)</label>
+                      <input
+                        type="text"
+                        value={slide.secondaryButtonText || ''}
+                        onChange={(e) => handleSlideChange(index, 'secondaryButtonText', e.target.value)}
+                        placeholder="e.g. Find Nearest Store"
+                        className="w-full px-3 py-2 bg-white rounded-lg border border-zinc-200 text-xs font-semibold focus:border-[#0071e3] outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-zinc-700 uppercase tracking-wider">CTA Button 2 Link</label>
+                      <input
+                        type="text"
+                        value={slide.secondaryButtonLink || ''}
+                        onChange={(e) => handleSlideChange(index, 'secondaryButtonLink', e.target.value)}
+                        placeholder="e.g. #store-locator or /stores"
+                        className="w-full px-3 py-2 bg-white rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none font-mono"
+                      />
+                    </div>
+
+                    {/* Image Fit and Focal Position Configuration */}
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-zinc-700 uppercase tracking-wider">Image Fit (Contain vs Cover)</label>
+                      <select
+                        value={slide.imageFit || 'contain'}
+                        onChange={(e) => handleSlideChange(index, 'imageFit', e.target.value)}
+                        className="w-full px-3 py-2 bg-white rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none"
+                      >
+                        <option value="contain">Contain (Recommended for isolated products to prevent any cropping)</option>
+                        <option value="cover">Cover (Fills entire right canvas, best for edge-to-edge graphics)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-zinc-700 uppercase tracking-wider">Image Focal Position</label>
+                      <select
+                        value={slide.focalPosition || 'right'}
+                        onChange={(e) => handleSlideChange(index, 'focalPosition', e.target.value)}
+                        className="w-full px-3 py-2 bg-white rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none"
+                      >
+                        <option value="right">Right Aligned (Apple default hero layout)</option>
+                        <option value="center">Center Aligned</option>
+                        <option value="left">Left Aligned</option>
+                      </select>
+                    </div>
+
+                    {/* Text Alignment */}
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-zinc-700 uppercase tracking-wider">Text Alignment</label>
+                      <select
+                        value={slide.textAlignment || 'left'}
+                        onChange={(e) => handleSlideChange(index, 'textAlignment', e.target.value)}
+                        className="w-full px-3 py-2 bg-white rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none"
+                      >
+                        <option value="left">Left Aligned</option>
+                        <option value="center">Center Aligned</option>
+                      </select>
+                    </div>
+
+                    {/* Background Theme Style */}
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-zinc-700 uppercase tracking-wider">Background Theme Style</label>
                       <select
                         value={slide.bgStyle || 'slide-dark'}
                         onChange={(e) => handleSlideChange(index, 'bgStyle', e.target.value)}
@@ -928,19 +1381,48 @@ export default function HeroBanners() {
                       </select>
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Banner Background Image (Optional)</label>
+                    {/* Desktop Product / Banner Image */}
+                    <div className="md:col-span-2 space-y-1 bg-white p-3.5 rounded-xl border border-zinc-200">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-[10px] font-bold text-zinc-800 uppercase tracking-wider">
+                          Desktop Product / Banner Image (Target: 1920 × 520 px, Max 10MB)
+                        </label>
+                        {slide.image && (
+                          <span className="text-[10px] text-emerald-600 font-semibold">Active</span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
                           value={slide.image || ''}
                           onChange={(e) => handleSlideChange(index, 'image', e.target.value)}
+                          onBlur={async () => {
+                            try {
+                              const updatedSlides = [...siteForm.heroSlides];
+                              updatedSlides[index] = {
+                                ...updatedSlides[index],
+                                hideText: true,
+                                imageFit: 'cover'
+                              };
+                              const updatedForm = {
+                                ...siteForm,
+                                heroSlides: updatedSlides,
+                                ...(index === 0 ? { homeHeroImage: slide.image } : {})
+                              };
+                              setSiteForm(updatedForm);
+                              await axiosClient.put('/settings', updatedForm);
+                              notifyAdminChange('settings', { action: 'update_banner_image' });
+                              showSuccessMessage(`Slide #${index + 1} image URL saved live!`);
+                            } catch (err) {
+                              console.error('Auto-save on blur failed:', err);
+                            }
+                          }}
                           placeholder="Image URL or upload file..."
-                          className="flex-1 px-3 py-2 bg-white rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none"
+                          className="flex-1 px-3 py-2 bg-zinc-50 rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none"
                         />
-                        <label className="flex items-center gap-1 bg-zinc-200 hover:bg-zinc-300 text-zinc-800 px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer">
-                          {uploadingIndex === index ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-700" />
+                        <label className="flex items-center gap-1 bg-[#0071e3] hover:bg-[#005bb5] text-white px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-2xs">
+                          {uploadingIndex === `${index}-image` ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
                           ) : (
                             <Upload className="h-3.5 w-3.5" />
                           )}
@@ -949,14 +1431,14 @@ export default function HeroBanners() {
                             type="file"
                             accept="image/*"
                             className="hidden"
-                            onChange={(e) => handleBannerImageUpload(index, e)}
+                            onChange={(e) => handleBannerImageUpload(index, e, 'image')}
                           />
                         </label>
                         {slide.image && (
                           <button
                             type="button"
-                            onClick={() => handleSlideChange(index, 'image', '')}
-                            className="p-2 text-rose-500 hover:text-rose-700 bg-rose-50 rounded-lg"
+                            onClick={() => handleRemoveSlideImage(index, 'image')}
+                            className="p-2 text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg cursor-pointer"
                             title="Remove Image"
                           >
                             <X className="h-3.5 w-3.5" />
@@ -965,22 +1447,64 @@ export default function HeroBanners() {
                       </div>
                     </div>
 
-                    {slide.image && (
-                      <div className="md:col-span-2 pt-2">
-                        <div className="relative w-full h-24 rounded-xl overflow-hidden border border-zinc-200 bg-zinc-100">
-                          <img 
-                            src={slide.image} 
-                            alt="Banner Preview" 
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                            <span className="text-white text-xs font-bold drop-shadow">
-                              Live Image Preview: {slide.title}
-                            </span>
-                          </div>
+                    {/* Mobile Banner Image (Optional) */}
+                    <div className="md:col-span-2 space-y-1 bg-white p-3.5 rounded-xl border border-zinc-200">
+                      <div className="flex items-center justify-between mb-1">
+                        <div>
+                          <label className="block text-[10px] font-bold text-zinc-800 uppercase tracking-wider">
+                            Mobile Banner Image (Optional, for 390px phone screens)
+                          </label>
+                          <p className="text-[10px] text-zinc-400">
+                            Leave empty to automatically use desktop image with responsive mobile scaling.
+                          </p>
                         </div>
+                        {slide.mobileImage && (
+                          <span className="text-[10px] text-emerald-600 font-semibold">Active</span>
+                        )}
                       </div>
-                    )}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={slide.mobileImage || ''}
+                          onChange={(e) => handleSlideChange(index, 'mobileImage', e.target.value)}
+                          onBlur={async () => {
+                            try {
+                              await axiosClient.put('/settings', siteForm);
+                              notifyAdminChange('settings', { action: 'update_banner_image' });
+                              showSuccessMessage(`Slide #${index + 1} mobile image URL saved live!`);
+                            } catch (err) {
+                              console.error('Auto-save on blur failed:', err);
+                            }
+                          }}
+                          placeholder="Mobile image URL or upload..."
+                          className="flex-1 px-3 py-2 bg-zinc-50 rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none"
+                        />
+                        <label className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-900 text-white px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-2xs">
+                          {uploadingIndex === `${index}-mobileImage` ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
+                          ) : (
+                            <Upload className="h-3.5 w-3.5" />
+                          )}
+                          Upload Mobile
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleBannerImageUpload(index, e, 'mobileImage')}
+                          />
+                        </label>
+                        {slide.mobileImage && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSlideImage(index, 'mobileImage')}
+                            className="p-2 text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg cursor-pointer"
+                            title="Remove Mobile Image"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
