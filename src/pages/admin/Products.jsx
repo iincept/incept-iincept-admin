@@ -43,49 +43,7 @@ import { getCategories } from '../../services/categoryApi';
 import axiosClient from '../../services/axiosClient';
 import VariantTagInput from '../../components/VariantTagInput';
 import { notifyAdminChange } from '../../services/liveSyncService';
-
-
-const resolveColorValue = (cVal) => {
-  if (!cVal) return '#cbd5e1';
-  const cValStr = cVal.toString().trim();
-  if (cValStr.startsWith('#') || cValStr.startsWith('rgb') || cValStr.startsWith('hsl')) {
-    return cValStr;
-  }
-  const PDP_COLOR_MAP = {
-    "space black": "#1c1c1c",
-    "space gray": "#555555",
-    "starlight": "#f5f5f4",
-    "silver": "#cbd5e1",
-    "desert titanium": "#e6c2b9",
-    "dark blue": "#2a4b7c",
-    "deep blue": "#1d3557",
-    "titanium": "#cbd5e1",
-    "white": "#ffffff",
-    "gold": "#e5c158",
-    "pink": "#ec4899",
-    "black": "#111111",
-    "orange": "#ff9f68",
-    "orenge": "#ff9f68",
-    "cosmic orange": "#d9a07a",
-    "blue": "#0071E3",
-    "red": "#e0115f",
-    "midnight": "#1e293b",
-    "light blue": "#bfdbfe",
-    "sky blue": "#bae6fd",
-    "lavender": "#e9d5ff",
-    "green": "#bbf7d0",
-    "dark gray": "#3f3f46",
-    "natural titanium": "#a39e99",
-    "natural": "#a39e99",
-    "black titanium": "#232426",
-    "white titanium": "#f2f1ed",
-    "deep purple": "#3b224c",
-    "purple": "#a855f7",
-    "yellow": "#eab308"
-  };
-  const lowerVal = cValStr.toLowerCase().replace(/\s+/g, ' ').trim();
-  return PDP_COLOR_MAP[lowerVal] || '#cbd5e1';
-};
+import { resolveColorHex, resolveColorValue, isValidHex, normalizeHex } from '../../utils/colorResolver';
 
 export default function Products() {
   const [products, setProducts] = useState([]);
@@ -428,12 +386,18 @@ export default function Products() {
       const exists = newVariants.find(v => (v.color || '').toString().toLowerCase() === colorName.toLowerCase());
       if (!exists) {
         newVariants.push({
+          id: `var-${Date.now()}-${countAdded}-${Math.random().toString(36).slice(2, 7)}`,
           color: colorName,
+          colorHex: resolveColorHex(colorName),
           price: productForm.price || '',
           discountPrice: productForm.discountPrice || '',
-          stock: productForm.stock || 10,
+          discountPercent: 0,
+          discount: 0,
+          discountInput: '',
+          stock: productForm.stock !== undefined && productForm.stock !== '' ? productForm.stock : 10,
           sku: `${productForm.brand ? productForm.brand.slice(0,3).toUpperCase() : 'APP'}-${colorName.slice(0,3).toUpperCase()}-${Date.now().toString().slice(-3)}`,
           partNumber: '',
+          modelNumber: '',
           images: []
         });
         countAdded++;
@@ -475,14 +439,20 @@ export default function Products() {
 
           if (!exists) {
             newVariants.push({
+              id: `var-${Date.now()}-${countAdded}-${Math.random().toString(36).slice(2, 7)}`,
               color: cName,
+              colorHex: resolveColorHex(cName),
               storage: sName,
               ram: rName,
               price: productForm.price || '',
               discountPrice: productForm.discountPrice || '',
-              stock: productForm.stock || 10,
+              discountPercent: 0,
+              discount: 0,
+              discountInput: '',
+              stock: productForm.stock !== undefined && productForm.stock !== '' ? productForm.stock : 10,
               sku: `MPN-${cName ? cName.slice(0,2).toUpperCase() : 'XX'}-${sName ? sName.replace(/[^0-9]/g, '') : '0'}-${rName ? rName.replace(/[^0-9]/g, '') : '0'}-${Date.now().toString().slice(-3)}`,
               partNumber: '',
+              modelNumber: '',
               images: []
             });
             countAdded++;
@@ -530,7 +500,9 @@ export default function Products() {
 
             if (!exists) {
               newVariants.push({
+                id: `var-${Date.now()}-${countAdded}-${Math.random().toString(36).slice(2, 7)}`,
                 color: cName,
+                colorHex: resolveColorHex(cName),
                 size: sName,
                 bandSize: bName,
                 connectivity: connName,
@@ -538,8 +510,12 @@ export default function Products() {
                 title: connName,
                 price: productForm.price || '',
                 discountPrice: productForm.discountPrice || '',
-                stock: productForm.stock || 10,
+                discountPercent: 0,
+                discount: 0,
+                discountInput: '',
+                stock: productForm.stock !== undefined && productForm.stock !== '' ? productForm.stock : 10,
                 partNumber: '',
+                modelNumber: '',
                 sku: `MPN-${cName ? cName.slice(0,2).toUpperCase() : 'XX'}-${sName ? sName.replace(/[^0-9]/g, '') : '0'}-${connName ? (connName.includes('Cellular') ? 'CELL' : 'GPS') : 'STD'}-${Date.now().toString().slice(-3)}`,
                 images: []
               });
@@ -560,8 +536,40 @@ export default function Products() {
 
   const handleProductSubmit = async (e) => {
     if (e) e.preventDefault();
+    if (!productForm.title || !productForm.title.trim()) {
+      setError('Product title is required');
+      return;
+    }
     if (!productForm.category) {
       setError('Please select a category');
+      return;
+    }
+
+    if (productForm.variants && productForm.variants.length > 0) {
+      for (let i = 0; i < productForm.variants.length; i++) {
+        const v = productForm.variants[i];
+        const vName = v.color || v.title || v.displayTitle || `Variant #${i + 1}`;
+        if (v.price !== undefined && v.price !== '') {
+          const numPrice = Number(v.price);
+          if (isNaN(numPrice) || numPrice < 0) {
+            setError(`Please enter a valid price for ${vName}`);
+            return;
+          }
+        }
+        if (v.stock !== undefined && v.stock !== '') {
+          const numStock = Number(v.stock);
+          if (isNaN(numStock) || numStock < 0) {
+            setError(`Please enter a valid stock for ${vName}`);
+            return;
+          }
+        }
+      }
+    }
+
+    const hasBasePrice = productForm.price !== undefined && productForm.price !== '' && Number(productForm.price) >= 0;
+    const hasVariantPrices = (productForm.variants || []).some(v => v.price !== undefined && v.price !== '' && Number(v.price) >= 0);
+    if (!hasBasePrice && !hasVariantPrices) {
+      setError('Please enter a product price or variant price');
       return;
     }
 
@@ -571,9 +579,11 @@ export default function Products() {
     // Ensure we have at least one variant if none are specified
     let finalVariants = [...(productForm.variants || [])];
     if (finalVariants.length === 0) {
+      const fallbackColor = productForm.colors?.[0]?.name || productForm.colors?.[0] || 'Standard';
       finalVariants = [{
         size: productForm.sizes?.[0] || 'Standard',
-        color: (productForm.colors?.[0]?.name || productForm.colors?.[0] || 'Standard'),
+        color: fallbackColor,
+        colorHex: resolveColorHex(fallbackColor),
         price: Number(productForm.price || 0),
         discountPrice: Number(productForm.discountPrice || 0),
         stock: Number(productForm.stock || 0),
@@ -581,6 +591,11 @@ export default function Products() {
         images: productForm.images || []
       }];
     }
+
+    finalVariants = finalVariants.map(v => ({
+      ...v,
+      colorHex: (v.colorHex && isValidHex(v.colorHex)) ? normalizeHex(v.colorHex) : resolveColorHex(v.color || '')
+    }));
 
     const variantColors = [];
     const variantSizes = [];
@@ -594,7 +609,8 @@ export default function Products() {
 
     finalVariants.forEach(v => {
       if (v.color && !variantColors.find(c => (c.name || c) === v.color)) {
-        variantColors.push({ name: v.color, value: v.color, images: v.images || [] });
+        const hex = v.colorHex || resolveColorHex(v.color);
+        variantColors.push({ name: v.color, value: hex, colorHex: hex, images: v.images || [] });
       }
       if (v.size && !variantSizes.includes(v.size)) {
         variantSizes.push(v.size);
@@ -708,15 +724,19 @@ export default function Products() {
         vDiscPrice = 0;
       }
 
-      return {
+      const vCopy = {
         ...v,
         price: vPrice,
         discountPrice: vDiscPrice,
         discountPercent: vDiscPercent,
         discount: vDiscPercent || (vDiscRaw > 0 ? vDiscRaw : 0),
         discountInput: vDiscRaw > 0 ? vDiscRaw : "",
-        stock: Number(v.stock || 0)
+        stock: Number(v.stock !== undefined && v.stock !== '' ? v.stock : (productForm.stock || 0))
       };
+      if (vCopy._id && !/^[0-9a-fA-F]{24}$/.test(String(vCopy._id))) {
+        delete vCopy._id;
+      }
+      return vCopy;
     });
 
     const validVariantDiscPrices = finalVariantsWithPrice
@@ -757,7 +777,7 @@ export default function Products() {
       ram: finalRam,
       processors: finalProcessors,
       variants: finalVariantsWithPrice,
-      displayImage: productForm.displayImage || '',
+      displayImage: productForm.displayImage || (finalVariantsWithPrice[0]?.images?.[0]) || '',
       colorImages: productForm.colorImages || {}
     };
 
@@ -810,7 +830,7 @@ export default function Products() {
 
     const prodVariants = Array.isArray(prod.variants) ? prod.variants : [];
 
-    const mappedVariants = prodVariants.map(v => {
+    const mappedVariants = prodVariants.map((v, idx) => {
       let discVal = (v.discountInput !== undefined && v.discountInput !== null && v.discountInput !== '')
         ? v.discountInput
         : (v.discountPercent !== undefined && v.discountPercent !== null && v.discountPercent !== '' 
@@ -828,6 +848,7 @@ export default function Products() {
 
       return {
         ...v,
+        id: v.id || (v._id ? String(v._id) : `var-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`),
         discount: numDisc !== null ? numDisc : (v.discount ?? 0),
         discountPercent: numDisc !== null ? numDisc : (v.discountPercent ?? 0),
         discountInput: (numDisc !== null && numDisc !== 0) ? numDisc : '',
@@ -949,6 +970,60 @@ export default function Products() {
     setProductForm(prev => ({
       ...prev,
       tags: prev.tags.filter(t => t !== tagToRemove)
+    }));
+  };
+
+  const handleAddVariant = () => {
+    setProductForm(prev => {
+      const cName = prev.colors?.[0]?.name || prev.colors?.[0] || '';
+      const cHex = prev.colors?.[0]?.colorHex || prev.colors?.[0]?.value || resolveColorHex(cName);
+      const newVariant = {
+        id: `var-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        color: cName,
+        colorHex: cHex,
+        price: prev.price || '',
+        discountPrice: '',
+        discountPercent: 0,
+        discount: 0,
+        discountInput: '',
+        stock: prev.stock !== undefined && prev.stock !== '' ? prev.stock : 10,
+        sku: `PRO-${Date.now().toString().slice(-4)}`,
+        partNumber: '',
+        modelNumber: '',
+        storage: prev.storage?.[0] || '',
+        ram: prev.ram?.[0] || '',
+        size: prev.sizes?.[0] || '',
+        bandSize: prev.bandSizes?.[0] || '',
+        connectivity: prev.connectivities?.[0] || '',
+        accessoriesSize: '',
+        glass: prev.glasses?.[0] || '',
+        processor: prev.processors?.[0] || '',
+        displayTitle: '',
+        images: []
+      };
+      return {
+        ...prev,
+        variants: [...(prev.variants || []), newVariant]
+      };
+    });
+  };
+
+  const handleUpdateVariant = (index, updates) => {
+    setProductForm(prev => {
+      const variants = [...(prev.variants || [])];
+      if (index < 0 || index >= variants.length) return prev;
+      variants[index] = {
+        ...variants[index],
+        ...(typeof updates === 'function' ? updates(variants[index]) : updates)
+      };
+      return { ...prev, variants };
+    });
+  };
+
+  const handleDeleteVariant = (index) => {
+    setProductForm(prev => ({
+      ...prev,
+      variants: (prev.variants || []).filter((_, i) => i !== index)
     }));
   };
 
@@ -1974,16 +2049,8 @@ export default function Products() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setProductForm(prev => ({
-                        ...prev,
-                        variants: [
-                          ...(prev.variants || []),
-                          { color: (prev.colors?.[0]?.name || prev.colors?.[0] || ''), price: prev.price || '', discountPrice: '', stock: prev.stock || '', sku: `PRO-${Date.now().toString().slice(-4)}`, images: [] }
-                        ]
-                      }));
-                    }}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-zinc-950 hover:bg-zinc-900 text-white text-xs font-bold rounded-xl transition-all cursor-pointer border-0"
+                    onClick={handleAddVariant}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-zinc-950 hover:bg-zinc-900 text-white text-xs font-bold rounded-xl transition-all cursor-pointer border-0 shadow-sm"
                   >
                     <Plus className="h-4 w-4" />
                     Add Variant
@@ -2001,17 +2068,18 @@ export default function Products() {
                       const selectedCatObj = categories.find(c => c._id === productForm.category || c.slug === productForm.category || c.name === productForm.category);
                       const selectedCatSlug = (selectedCatObj?.slug || selectedCatObj?.name || productForm.category || '').toString().toLowerCase();
                       const isWatchCategory = selectedCatSlug.includes('watch') || selectedCatSlug.includes('wearable');
+                      const variantKey = v.id || v._id || `variant-${vIdx}`;
 
                       return (
-                        <div key={vIdx} className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm space-y-4 hover:border-zinc-300 transition-all text-left">
+                        <div key={variantKey} className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm space-y-4 hover:border-zinc-300 transition-all text-left">
 
                           {/* Variant header row with Excel-style specs summary */}
                           <div className="flex justify-between items-center border-b border-zinc-150 pb-3 bg-zinc-100/70 -mx-5 -mt-5 px-5 py-2.5 rounded-t-xl">
                             <div className="flex items-center gap-2">
                               <GripVertical className="h-4 w-4 text-zinc-400 cursor-grab" />
                               <span className="text-[11px] font-extrabold text-zinc-800 uppercase tracking-wide flex items-center gap-2 font-mono">
-                                <span className="inline-block w-3.5 h-3.5 rounded-full border border-zinc-300 shrink-0" style={{ backgroundColor: resolveColorValue(v.color) }} />
-                                <span>#{vIdx + 1}: {v.color || 'Color'} {v.accessoriesSize && v.accessoriesSize !== 'None' ? `| Size: ${v.accessoriesSize}` : ''} {v.size ? `| ${v.size}` : ''} {v.bandSize ? `| Band: ${v.bandSize}` : ''} {v.connectivity ? `| ${v.connectivity}` : ''} {!isWatchCategory && v.ram ? `| ${v.ram}` : ''} {!isWatchCategory && v.storage ? `| ${v.storage}` : ''} {v.partNumber ? `| MPN: ${v.partNumber}` : ''} {v.price ? `| ₹${Number(v.price).toLocaleString('en-IN')}` : ''}</span>
+                                <span className="inline-block w-3.5 h-3.5 rounded-full border border-zinc-300 shrink-0 shadow-2xs" style={{ backgroundColor: resolveColorValue(v.colorHex || v.color) }} />
+                                <span>#{vIdx + 1}: {v.color || 'Color'} {v.colorHex ? `(${v.colorHex})` : ''} {v.accessoriesSize && v.accessoriesSize !== 'None' ? `| Size: ${v.accessoriesSize}` : ''} {v.size ? `| ${v.size}` : ''} {v.bandSize ? `| Band: ${v.bandSize}` : ''} {v.connectivity ? `| ${v.connectivity}` : ''} {!isWatchCategory && v.ram ? `| ${v.ram}` : ''} {!isWatchCategory && v.storage ? `| ${v.storage}` : ''} {v.partNumber ? `| MPN: ${v.partNumber}` : ''} {v.sku ? `| SKU: ${v.sku}` : ''} {v.price ? `| ₹${Number(v.price).toLocaleString('en-IN')}` : ''}</span>
                                 {vIdx === 0 && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-sans">Default</span>}
                               </span>
                             </div>
@@ -2057,12 +2125,7 @@ export default function Products() {
 
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setProductForm(prev => ({
-                                    ...prev,
-                                    variants: prev.variants.filter((_, i) => i !== vIdx)
-                                  }));
-                                }}
+                                onClick={() => handleDeleteVariant(vIdx)}
                                 className="px-2 py-1 text-xs font-bold text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer border-0 bg-transparent flex items-center gap-1"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -2072,21 +2135,44 @@ export default function Products() {
                           </div>
 
                           {/* Grid row: Watch vs Non-Watch Variant Fields */}
-                          <div className={`grid gap-3.5 ${isWatchCategory ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-5' : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-7'}`}>
+                          <div className={`grid gap-3.5 ${isWatchCategory ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6' : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6'}`}>
                             <div>
-                              <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Color</label>
-                              <input
-                                type="text"
-                                placeholder="e.g. Space Grey"
-                                value={v.color || ''}
-                                onChange={(e) => {
-                                  const updated = [...productForm.variants];
-                                  updated[vIdx] = { ...v, color: e.target.value };
-                                  setProductForm({ ...productForm, variants: updated });
-                                  if (vIdx === 0) setSelectedPreviewColor(e.target.value);
-                                }}
-                                className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium"
-                              />
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Color & Shade</label>
+                                <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase">{v.colorHex || resolveColorHex(v.color) || '#------'}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <div className="relative shrink-0 group/color" title="Click swatch to pick custom shade">
+                                  <input
+                                    type="color"
+                                    value={isValidHex(v.colorHex || resolveColorHex(v.color)) ? normalizeHex(v.colorHex || resolveColorHex(v.color)) : '#808080'}
+                                    onChange={(e) => handleUpdateVariant(vIdx, { colorHex: e.target.value.toUpperCase() })}
+                                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                                  />
+                                  <div
+                                    className="w-9 h-9 rounded-xl border border-zinc-300 shadow-xs flex items-center justify-center transition-transform group-hover/color:scale-105 cursor-pointer overflow-hidden"
+                                    style={{ backgroundColor: resolveColorValue(v.colorHex || v.color) }}
+                                  />
+                                </div>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Chalk Pink"
+                                  value={v.color || ''}
+                                  onChange={(e) => {
+                                    const newName = e.target.value;
+                                    const autoHex = resolveColorHex(newName);
+                                    handleUpdateVariant(vIdx, curr => {
+                                      const wasAuto = !curr.colorHex || curr.colorHex === resolveColorHex(curr.color || '');
+                                      return {
+                                        color: newName,
+                                        colorHex: wasAuto ? autoHex : curr.colorHex
+                                      };
+                                    });
+                                    if (vIdx === 0) setSelectedPreviewColor(newName);
+                                  }}
+                                  className="w-full px-3 py-2 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium"
+                                />
+                              </div>
                             </div>
 
                             {isWatchCategory ? (
@@ -2096,12 +2182,7 @@ export default function Products() {
                                   <div className="flex gap-1.5 items-center">
                                     <select
                                       value={['40mm', '42mm', '44mm', '46mm', '41mm', '45mm', '49mm'].includes(v.size) ? v.size : ''}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        const updated = [...productForm.variants];
-                                        updated[vIdx] = { ...v, size: val };
-                                        setProductForm({ ...productForm, variants: updated });
-                                      }}
+                                      onChange={(e) => handleUpdateVariant(vIdx, { size: e.target.value })}
                                       className="px-2 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-bold text-zinc-900 shrink-0 cursor-pointer shadow-xs"
                                     >
                                       <option value="">Select Size</option>
@@ -2117,11 +2198,7 @@ export default function Products() {
                                       type="text"
                                       placeholder="e.g. 42mm"
                                       value={v.size || ''}
-                                      onChange={(e) => {
-                                        const updated = [...productForm.variants];
-                                        updated[vIdx] = { ...v, size: e.target.value };
-                                        setProductForm({ ...productForm, variants: updated });
-                                      }}
+                                      onChange={(e) => handleUpdateVariant(vIdx, { size: e.target.value })}
                                       className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium"
                                     />
                                   </div>
@@ -2132,12 +2209,7 @@ export default function Products() {
                                   <div className="flex gap-1.5 items-center">
                                     <select
                                       value={['S', 'M', 'L', 'S/M', 'M/L', 'Loop', 'Solo Loop', 'Sport Loop', 'Alpine Loop', 'Milanese Loop', 'Trail Loop', 'Ocean Band'].includes(v.bandSize) ? v.bandSize : ''}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        const updated = [...productForm.variants];
-                                        updated[vIdx] = { ...v, bandSize: val };
-                                        setProductForm({ ...productForm, variants: updated });
-                                      }}
+                                      onChange={(e) => handleUpdateVariant(vIdx, { bandSize: e.target.value })}
                                       className="px-2 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-bold text-zinc-900 shrink-0 cursor-pointer shadow-xs"
                                     >
                                       <option value="">Select Band</option>
@@ -2158,11 +2230,7 @@ export default function Products() {
                                       type="text"
                                       placeholder="e.g. S, M, L, S/M or Loop"
                                       value={v.bandSize || ''}
-                                      onChange={(e) => {
-                                        const updated = [...productForm.variants];
-                                        updated[vIdx] = { ...v, bandSize: e.target.value };
-                                        setProductForm({ ...productForm, variants: updated });
-                                      }}
+                                      onChange={(e) => handleUpdateVariant(vIdx, { bandSize: e.target.value })}
                                       className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium"
                                     />
                                   </div>
@@ -2176,11 +2244,7 @@ export default function Products() {
                                     type="text"
                                     placeholder="e.g. 512GB SSD"
                                     value={v.storage || ''}
-                                    onChange={(e) => {
-                                      const updated = [...productForm.variants];
-                                      updated[vIdx] = { ...v, storage: e.target.value };
-                                      setProductForm({ ...productForm, variants: updated });
-                                    }}
+                                    onChange={(e) => handleUpdateVariant(vIdx, { storage: e.target.value })}
                                     className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium"
                                   />
                                 </div>
@@ -2191,11 +2255,7 @@ export default function Products() {
                                     type="text"
                                     placeholder="e.g. 16GB"
                                     value={v.ram || ''}
-                                    onChange={(e) => {
-                                      const updated = [...productForm.variants];
-                                      updated[vIdx] = { ...v, ram: e.target.value };
-                                      setProductForm({ ...productForm, variants: updated });
-                                    }}
+                                    onChange={(e) => handleUpdateVariant(vIdx, { ram: e.target.value })}
                                     className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium"
                                   />
                                 </div>
@@ -2206,11 +2266,7 @@ export default function Products() {
                                     type="text"
                                     placeholder="e.g. Standard glass / Nano-texture glass"
                                     value={v.glass || ''}
-                                    onChange={(e) => {
-                                      const updated = [...productForm.variants];
-                                      updated[vIdx] = { ...v, glass: e.target.value };
-                                      setProductForm({ ...productForm, variants: updated });
-                                    }}
+                                    onChange={(e) => handleUpdateVariant(vIdx, { glass: e.target.value })}
                                     className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium"
                                   />
                                 </div>
@@ -2221,11 +2277,7 @@ export default function Products() {
                                     type="text"
                                     placeholder="e.g. Apple M5 chip with 10-core CPU"
                                     value={v.processor || v.chip || ''}
-                                    onChange={(e) => {
-                                      const updated = [...productForm.variants];
-                                      updated[vIdx] = { ...v, processor: e.target.value, chip: e.target.value };
-                                      setProductForm({ ...productForm, variants: updated });
-                                    }}
+                                    onChange={(e) => handleUpdateVariant(vIdx, { processor: e.target.value, chip: e.target.value })}
                                     className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium text-zinc-900 font-sans"
                                   />
                                 </div>
@@ -2236,11 +2288,7 @@ export default function Products() {
                               <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Accessories Size</label>
                               <select
                                 value={v.accessoriesSize || ''}
-                                onChange={(e) => {
-                                  const updated = [...productForm.variants];
-                                  updated[vIdx] = { ...v, accessoriesSize: e.target.value };
-                                  setProductForm({ ...productForm, variants: updated });
-                                }}
+                                onChange={(e) => handleUpdateVariant(vIdx, { accessoriesSize: e.target.value })}
                                 className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-bold text-zinc-900 cursor-pointer shadow-xs"
                               >
                                 <option value="">None / Not Applicable</option>
@@ -2253,32 +2301,45 @@ export default function Products() {
                             </div>
 
                             <div>
-                              <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Part No. / MPN *</label>
+                              <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Part No. / MPN</label>
                               <input
                                 type="text"
                                 placeholder="e.g. MDHE4HN/A"
                                 value={v.partNumber || ''}
-                                onChange={(e) => {
-                                  const updated = [...productForm.variants];
-                                  updated[vIdx] = { ...v, partNumber: e.target.value, sku: e.target.value };
-                                  setProductForm({ ...productForm, variants: updated });
-                                }}
+                                onChange={(e) => handleUpdateVariant(vIdx, curr => ({ partNumber: e.target.value, sku: curr.sku || e.target.value }))}
                                 className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs font-mono font-bold text-black bg-amber-50/50"
                               />
                             </div>
 
-                             {isWatchCategory ? (
+                            <div>
+                              <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">SKU</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. PRO-1234"
+                                value={v.sku || ''}
+                                onChange={(e) => handleUpdateVariant(vIdx, { sku: e.target.value })}
+                                className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs font-mono text-zinc-800 bg-white"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Model No.</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. A3241"
+                                value={v.modelNumber || ''}
+                                onChange={(e) => handleUpdateVariant(vIdx, { modelNumber: e.target.value })}
+                                className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs font-mono text-zinc-800 bg-white"
+                              />
+                            </div>
+
+                            {isWatchCategory ? (
                               <div className="col-span-2">
                                 <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Connectivity / Variant Title</label>
                                 <div className="flex gap-2 items-center">
                                   <select
                                     value={v.connectivity || (v.displayTitle?.includes('Cellular') ? 'GPS + Cellular' : v.displayTitle?.includes('GPS') ? 'GPS' : '')}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      const updated = [...productForm.variants];
-                                      updated[vIdx] = { ...v, connectivity: val, displayTitle: val, title: val };
-                                      setProductForm({ ...productForm, variants: updated });
-                                    }}
+                                    onChange={(e) => handleUpdateVariant(vIdx, { connectivity: e.target.value, displayTitle: e.target.value, title: e.target.value })}
                                     className="px-2.5 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-bold text-zinc-900 shrink-0 cursor-pointer shadow-xs"
                                   >
                                     <option value="">Select Connectivity</option>
@@ -2289,12 +2350,7 @@ export default function Products() {
                                     type="text"
                                     placeholder="e.g. GPS or GPS + Cellular"
                                     value={v.connectivity || v.displayTitle || v.title || ''}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      const updated = [...productForm.variants];
-                                      updated[vIdx] = { ...v, connectivity: val, displayTitle: val, title: val };
-                                      setProductForm({ ...productForm, variants: updated });
-                                    }}
+                                    onChange={(e) => handleUpdateVariant(vIdx, { connectivity: e.target.value, displayTitle: e.target.value, title: e.target.value })}
                                     className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium"
                                   />
                                 </div>
@@ -2306,11 +2362,7 @@ export default function Products() {
                                   type="text"
                                   placeholder="e.g. 11-inch iPad Pro Wi‑Fi 1TB with nano-texture glass"
                                   value={v.displayTitle || v.title || ''}
-                                  onChange={(e) => {
-                                    const updated = [...productForm.variants];
-                                    updated[vIdx] = { ...v, displayTitle: e.target.value, title: e.target.value };
-                                    setProductForm({ ...productForm, variants: updated });
-                                  }}
+                                  onChange={(e) => handleUpdateVariant(vIdx, { displayTitle: e.target.value, title: e.target.value })}
                                   className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium"
                                 />
                               </div>
@@ -2323,12 +2375,8 @@ export default function Products() {
                                 required
                                 min="0"
                                 placeholder="79900"
-                                value={v.price || ''}
-                                onChange={(e) => {
-                                  const updated = [...productForm.variants];
-                                  updated[vIdx] = { ...v, price: e.target.value };
-                                  setProductForm({ ...productForm, variants: updated });
-                                }}
+                                value={v.price !== undefined && v.price !== null ? v.price : ''}
+                                onChange={(e) => handleUpdateVariant(vIdx, { price: e.target.value })}
                                 className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs font-bold text-zinc-900"
                               />
                             </div>
@@ -2341,14 +2389,11 @@ export default function Products() {
                                 value={v.discountInput !== undefined && v.discountInput !== null && v.discountInput !== '' ? v.discountInput : (v.discountPercent !== undefined && v.discountPercent !== null && v.discountPercent !== '' ? v.discountPercent : (v.discount !== undefined && v.discount !== null && v.discount !== '' ? v.discount : ''))}
                                 onChange={(e) => {
                                   const val = e.target.value;
-                                  const updated = [...productForm.variants];
-                                  updated[vIdx] = { 
-                                    ...v, 
+                                  handleUpdateVariant(vIdx, { 
                                     discountInput: val,
                                     discountPercent: val !== '' ? Number(val) : 0,
                                     discount: val !== '' ? Number(val) : 0
-                                  };
-                                  setProductForm({ ...productForm, variants: updated });
+                                  });
                                 }}
                                 className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs font-bold text-emerald-700 bg-emerald-50/50"
                               />
@@ -2392,12 +2437,8 @@ export default function Products() {
                                 required
                                 min="0"
                                 placeholder="10"
-                                value={v.stock || ''}
-                                onChange={(e) => {
-                                  const updated = [...productForm.variants];
-                                  updated[vIdx] = { ...v, stock: e.target.value };
-                                  setProductForm({ ...productForm, variants: updated });
-                                }}
+                                value={v.stock !== undefined && v.stock !== null ? v.stock : ''}
+                                onChange={(e) => handleUpdateVariant(vIdx, { stock: e.target.value })}
                                 className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs"
                               />
                             </div>
@@ -2425,9 +2466,9 @@ export default function Products() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const updated = [...productForm.variants];
-                                      updated[vIdx].images = v.images.filter((_, i) => i !== imgIdx);
-                                      setProductForm({ ...productForm, variants: updated });
+                                      handleUpdateVariant(vIdx, curr => ({
+                                        images: (curr.images || []).filter((_, i) => i !== imgIdx)
+                                      }));
                                     }}
                                     className="absolute top-1 right-1 h-5 w-5 bg-black/60 hover:bg-black text-white font-bold text-[10px] rounded-full flex items-center justify-center cursor-pointer border-0 shadow-sm"
                                   >
@@ -2458,15 +2499,7 @@ export default function Products() {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setProductForm(prev => ({
-                          ...prev,
-                          variants: [
-                            ...(prev.variants || []),
-                            { size: prev.sizes?.[0] || '', color: (prev.colors?.[0]?.name || prev.colors?.[0] || ''), price: prev.price || '', discountPrice: '', stock: prev.stock || '', sku: `PRO-${Date.now().toString().slice(-4)}`, images: [] }
-                          ]
-                        }));
-                      }}
+                      onClick={handleAddVariant}
                       className="flex items-center gap-1.5 px-4 py-2.5 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold rounded-xl transition-all cursor-pointer bg-white"
                     >
                       <Plus className="h-4 w-4 text-zinc-400" />
@@ -2600,7 +2633,7 @@ export default function Products() {
                               key={cName}
                               type="button"
                               onClick={() => setSelectedPreviewColor(cName)}
-                              style={{ backgroundColor: resolveColorValue(cName) }}
+                              style={{ backgroundColor: resolveColorValue(c) }}
                               className={`w-5 h-5 rounded-full cursor-pointer border transition-all ${isSelected ? 'scale-125 border-zinc-900 ring-2 ring-zinc-300' : 'border-zinc-300 hover:scale-110'}`}
                               title={cName}
                             />
