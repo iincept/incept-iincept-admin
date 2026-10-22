@@ -40,7 +40,24 @@ export default function NavbarManager() {
       setLoading(true);
       const response = await axiosClient.get('/settings');
       if (response.data && response.data.navbarMenuItems && response.data.navbarMenuItems.length > 0) {
-        setNavItems(response.data.navbarMenuItems);
+        const items = response.data.navbarMenuItems.map(item => {
+          if ((item.name || '').toLowerCase().includes('accessori') && (!item.dropdownItems || item.dropdownItems.length === 0)) {
+            return {
+              ...item,
+              dropdownItems: [
+                { label: 'Explore All Accessories', path: '/accessories', query: 'Accessories', image: '/accessories_category_uploaded.png', price: 'Cables, cases & chargers', isActive: true },
+                { label: 'Mac Accessories', path: '/accessories?product=mac', query: 'Mac', image: '/accessories_category_uploaded.png', price: 'Keyboards, Mice & Docks', isActive: true },
+                { label: 'iPad Accessories', path: '/accessories?product=ipad', query: 'iPad', image: '/ipad_nav/dropdown_ipad_accessories.jpg', price: 'Pencils & Folios', isActive: true },
+                { label: 'iPhone Accessories', path: '/accessories?product=iphone', query: 'iPhone', image: '/iphone_nav/dropdown_iphone_accessories.png', price: 'MagSafe & Cases', isActive: true },
+                { label: 'Apple Watch Accessories', path: '/accessories?product=watch', query: 'Watch', image: '/watch_category_uploaded.png', price: 'Bands & Chargers', isActive: true },
+                { label: 'AirPods Accessories', path: '/accessories?product=airpods', query: 'AirPods', image: '/airpods_category_uploaded.png', price: 'Cases & Lanyards', isActive: true },
+                { label: 'TV & Home Accessories', path: '/accessories?product=tv-home', query: 'TV & Home', image: '/tvhome_category_uploaded.png', price: 'Remotes & Mounts', isActive: true }
+              ]
+            };
+          }
+          return item;
+        });
+        setNavItems(items);
       } else {
         // Fallback defaults with dropdown items & images
         setNavItems([
@@ -140,13 +157,13 @@ export default function NavbarManager() {
             link: '/accessories',
             isActive: true,
             dropdownItems: [
-              { label: 'Shop All Accessories', path: '/accessories', query: 'Accessories', image: '/accessories_category_uploaded.png', price: 'Essential Gear', isActive: true },
+              { label: 'Explore All Accessories', path: '/accessories', query: 'Accessories', image: '/accessories_category_uploaded.png', price: 'Cables, cases & chargers', isActive: true },
               { label: 'Mac Accessories', path: '/accessories?product=mac', query: 'Mac', image: '/accessories_category_uploaded.png', price: 'Keyboards, Mice & Docks', isActive: true },
-              { label: 'iPad Accessories', path: '/accessories?product=ipad', query: 'iPad', image: '/accessories_category_uploaded.png', price: 'Pencils & Folios', isActive: true },
-              { label: 'iPhone Accessories', path: '/accessories?product=iphone', query: 'iPhone', image: '/accessories_category_uploaded.png', price: 'MagSafe & Cases', isActive: true },
-              { label: 'Watch Accessories', path: '/accessories?product=watch', query: 'Watch', image: '/accessories_category_uploaded.png', price: 'Bands & Chargers', isActive: true },
-              { label: 'AirPods Accessories', path: '/accessories?product=airpods', query: 'AirPods', image: '/accessories_category_uploaded.png', price: 'Cases & Lanyards', isActive: true },
-              { label: 'TV & Home Accessories', path: '/accessories?product=tv-home', query: 'TV & Home', image: '/accessories_category_uploaded.png', price: 'Remotes & Mounts', isActive: true }
+              { label: 'iPad Accessories', path: '/accessories?product=ipad', query: 'iPad', image: '/ipad_nav/dropdown_ipad_accessories.jpg', price: 'Pencils & Folios', isActive: true },
+              { label: 'iPhone Accessories', path: '/accessories?product=iphone', query: 'iPhone', image: '/iphone_nav/dropdown_iphone_accessories.png', price: 'MagSafe & Cases', isActive: true },
+              { label: 'Apple Watch Accessories', path: '/accessories?product=watch', query: 'Watch', image: '/watch_category_uploaded.png', price: 'Bands & Chargers', isActive: true },
+              { label: 'AirPods Accessories', path: '/accessories?product=airpods', query: 'AirPods', image: '/airpods_category_uploaded.png', price: 'Cases & Lanyards', isActive: true },
+              { label: 'TV & Home Accessories', path: '/accessories?product=tv-home', query: 'TV & Home', image: '/tvhome_category_uploaded.png', price: 'Remotes & Mounts', isActive: true }
             ]
           },
           {
