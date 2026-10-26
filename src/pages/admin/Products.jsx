@@ -45,6 +45,39 @@ import VariantTagInput from '../../components/VariantTagInput';
 import { notifyAdminChange } from '../../services/liveSyncService';
 import { resolveColorHex, resolveColorValue, isValidHex, normalizeHex } from '../../utils/colorResolver';
 
+const WATCH_BAND_SIZES = [
+  '40mm',
+  '41mm',
+  '42mm',
+  '46mm',
+  '49mm'
+];
+
+const WATCH_STRAP_SIZES = [
+  'S/M',
+  'M/L',
+  'Small',
+  'Medium',
+  'Large',
+  'Loop'
+];
+
+const checkIsWatchBand = (product, catSlug = '') => {
+  if (!product) return false;
+  const isWatch = catSlug.includes('watch') || catSlug.includes('wearable');
+  if (isWatch) return true;
+  const isAcc = catSlug.includes('accessori');
+  if (!isAcc) return false;
+  if (product.isWatchBand === true) return true;
+  if (Array.isArray(product.bandSizes) && product.bandSizes.length > 0) return true;
+  if (Array.isArray(product.strapSizes) && product.strapSizes.length > 0) return true;
+  const title = (product.title || '').trim();
+  if (!title) return false;
+  if (/head|cushion/i.test(title)) return false;
+  return /\b(watch\s*band|sport\s*band|ocean\s*band|milanese|sport\s*loop|solo\s*loop|alpine\s*loop|trail\s*loop|braided\s*solo|link\s*bracelet|modern\s*buckle|watch\s*strap)\b/i.test(title) ||
+    /(\bband\b|\bloop\b)/i.test(title);
+};
+
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -472,16 +505,18 @@ export default function Products() {
     const currentColors = (productForm.colors || []).map(c => typeof c === 'object' ? c.name : c).filter(Boolean);
     const currentSizes = (productForm.sizes || []).filter(Boolean);
     const currentBandSizes = (productForm.bandSizes || []).filter(Boolean);
+    const currentStrapSizes = (productForm.strapSizes || []).filter(Boolean);
     const currentConnectivities = (productForm.connectivities || []).filter(Boolean);
 
-    if (currentColors.length === 0 && currentSizes.length === 0 && currentBandSizes.length === 0 && currentConnectivities.length === 0) {
-      setError("Please enter Colors, Case Sizes (42mm/46mm), Band Sizes (S, M, L, S/M, M/L, Loop), or Connectivity (GPS, GPS + Cellular) first!");
+    if (currentColors.length === 0 && currentSizes.length === 0 && currentBandSizes.length === 0 && currentStrapSizes.length === 0 && currentConnectivities.length === 0) {
+      setError("Please enter Colors, Band Sizes (40mm, 42mm, etc.), or Strap Sizes (S/M, Loop, etc.) first!");
       return;
     }
 
     const colorList = currentColors.length > 0 ? currentColors : [''];
     const sizeList = currentSizes.length > 0 ? currentSizes : [''];
     const bandList = currentBandSizes.length > 0 ? currentBandSizes : [''];
+    const strapList = currentStrapSizes.length > 0 ? currentStrapSizes : [''];
     const connList = currentConnectivities.length > 0 ? currentConnectivities : [''];
 
     const newVariants = [...(productForm.variants || [])];
@@ -490,37 +525,42 @@ export default function Products() {
     colorList.forEach(cName => {
       sizeList.forEach(sName => {
         bandList.forEach(bName => {
-          connList.forEach(connName => {
-            const exists = newVariants.find(v => 
-              (v.color || '').toString().toLowerCase() === (cName || '').toLowerCase() &&
-              (v.size || '').toString().toLowerCase() === (sName || '').toLowerCase() &&
-              (v.bandSize || '').toString().toLowerCase() === (bName || '').toLowerCase() &&
-              (v.connectivity || '').toString().toLowerCase() === (connName || '').toLowerCase()
-            );
+          strapList.forEach(strapName => {
+            connList.forEach(connName => {
+              const exists = newVariants.find(v => 
+                (v.color || '').toString().toLowerCase() === (cName || '').toLowerCase() &&
+                (v.size || '').toString().toLowerCase() === (sName || '').toLowerCase() &&
+                (v.bandSize || '').toString().toLowerCase() === (bName || '').toLowerCase() &&
+                (v.strapSize || '').toString().toLowerCase() === (strapName || '').toLowerCase() &&
+                (v.connectivity || '').toString().toLowerCase() === (connName || '').toLowerCase()
+              );
 
-            if (!exists) {
-              newVariants.push({
-                id: `var-${Date.now()}-${countAdded}-${Math.random().toString(36).slice(2, 7)}`,
-                color: cName,
-                colorHex: resolveColorHex(cName),
-                size: sName,
-                bandSize: bName,
-                connectivity: connName,
-                displayTitle: connName,
-                title: connName,
-                price: productForm.price || '',
-                discountPrice: productForm.discountPrice || '',
-                discountPercent: 0,
-                discount: 0,
-                discountInput: '',
-                stock: productForm.stock !== undefined && productForm.stock !== '' ? productForm.stock : 10,
-                partNumber: '',
-                modelNumber: '',
-                sku: `MPN-${cName ? cName.slice(0,2).toUpperCase() : 'XX'}-${sName ? sName.replace(/[^0-9]/g, '') : '0'}-${connName ? (connName.includes('Cellular') ? 'CELL' : 'GPS') : 'STD'}-${Date.now().toString().slice(-3)}`,
-                images: []
-              });
-              countAdded++;
-            }
+              if (!exists) {
+                newVariants.push({
+                  id: `var-${Date.now()}-${countAdded}-${Math.random().toString(36).slice(2, 7)}`,
+                  color: cName,
+                  colorHex: resolveColorHex(cName),
+                  size: sName || bName,
+                  bandSize: bName,
+                  strapSize: strapName,
+                  accessoriesSize: strapName,
+                  connectivity: connName,
+                  displayTitle: [bName, strapName, connName].filter(Boolean).join(' '),
+                  title: [bName, strapName, connName].filter(Boolean).join(' '),
+                  price: productForm.price || '',
+                  discountPrice: productForm.discountPrice || '',
+                  discountPercent: 0,
+                  discount: 0,
+                  discountInput: '',
+                  stock: productForm.stock !== undefined && productForm.stock !== '' ? productForm.stock : 10,
+                  partNumber: '',
+                  modelNumber: '',
+                  sku: `MPN-${cName ? cName.slice(0,2).toUpperCase() : 'XX'}-${bName ? bName.replace(/[^0-9]/g, '') : '0'}-${strapName ? strapName.replace(/[^A-Za-z0-9]/g, '') : '0'}-${Date.now().toString().slice(-3)}`,
+                  images: []
+                });
+                countAdded++;
+              }
+            });
           });
         });
       });
@@ -530,7 +570,7 @@ export default function Products() {
       ...productForm,
       variants: newVariants
     });
-    showSuccessMessage(`Generated ${countAdded} (Color + Case Size + Band Size + Connectivity) Watch Variant Blocks! Scroll down to enter Part Numbers & Prices.`);
+    showSuccessMessage(`Generated ${countAdded} Watch / Watch Band Variant Blocks! Scroll down to enter Part Numbers & Prices.`);
   };
 
 
@@ -601,6 +641,7 @@ export default function Products() {
     const variantSizes = [];
     const variantAccessoriesSizes = [];
     const variantBandSizes = [];
+    const variantStrapSizes = [];
     const variantConnectivities = [];
     const variantGlasses = [];
     const variantStorage = [];
@@ -620,6 +661,9 @@ export default function Products() {
       }
       if (v.bandSize && !variantBandSizes.includes(v.bandSize)) {
         variantBandSizes.push(v.bandSize);
+      }
+      if (v.strapSize && !variantStrapSizes.includes(v.strapSize)) {
+        variantStrapSizes.push(v.strapSize);
       }
       if (v.connectivity && !variantConnectivities.includes(v.connectivity)) {
         variantConnectivities.push(v.connectivity);
@@ -655,6 +699,11 @@ export default function Products() {
     const finalBandSizes = [...(productForm.bandSizes || [])];
     variantBandSizes.forEach(vb => {
       if (!finalBandSizes.includes(vb)) finalBandSizes.push(vb);
+    });
+
+    const finalStrapSizes = [...(productForm.strapSizes || [])];
+    variantStrapSizes.forEach(vs => {
+      if (!finalStrapSizes.includes(vs)) finalStrapSizes.push(vs);
     });
 
     const finalConnectivities = [...(productForm.connectivities || [])];
@@ -726,6 +775,10 @@ export default function Products() {
 
       const vCopy = {
         ...v,
+        bandSize: v.bandSize || '',
+        strapSize: v.strapSize || v.accessoriesSize || '',
+        size: v.size || v.bandSize || '',
+        accessoriesSize: v.accessoriesSize || v.strapSize || '',
         price: vPrice,
         discountPrice: vDiscPrice,
         discountPercent: vDiscPercent,
@@ -767,9 +820,10 @@ export default function Products() {
       discountPercent: finalParentDiscPercent,
       discount: finalParentDiscPercent,
       stock: finalVariantsWithPrice.reduce((acc, v) => acc + Number(v.stock || 0), 0),
-      sizes: finalSizes,
-      accessoriesSizes: variantAccessoriesSizes,
+      sizes: finalBandSizes.length > 0 ? finalBandSizes : finalSizes,
+      accessoriesSizes: finalStrapSizes.length > 0 ? finalStrapSizes : (variantAccessoriesSizes.length > 0 ? variantAccessoriesSizes : (finalBandSizes.length > 0 ? finalBandSizes : [])),
       bandSizes: finalBandSizes,
+      strapSizes: finalStrapSizes,
       connectivities: finalConnectivities,
       glasses: finalGlasses,
       colors: finalColors,
@@ -846,9 +900,27 @@ export default function Products() {
 
       const numDisc = (discVal !== '' && discVal !== undefined && discVal !== null) ? Number(discVal) : null;
 
+      // Resolve bandSize (e.g. 40mm, 42mm) and strapSize (e.g. S/M, Loop)
+      let resolvedBandSize = v.bandSize || '';
+      let resolvedStrapSize = v.strapSize || '';
+      if (!resolvedBandSize && /mm$/i.test(v.size || '')) {
+        resolvedBandSize = v.size;
+      }
+      if (!resolvedBandSize && /mm$/i.test(v.accessoriesSize || '')) {
+        resolvedBandSize = v.accessoriesSize;
+      }
+      if (!resolvedStrapSize && v.accessoriesSize && !/mm$/i.test(v.accessoriesSize)) {
+        resolvedStrapSize = v.accessoriesSize;
+      }
+      if (!resolvedStrapSize && v.size && !/mm$/i.test(v.size) && !WATCH_BAND_SIZES.includes(v.size)) {
+        resolvedStrapSize = v.size;
+      }
+
       return {
         ...v,
         id: v.id || (v._id ? String(v._id) : `var-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`),
+        bandSize: resolvedBandSize,
+        strapSize: resolvedStrapSize,
         discount: numDisc !== null ? numDisc : (v.discount ?? 0),
         discountPercent: numDisc !== null ? numDisc : (v.discountPercent ?? 0),
         discountInput: (numDisc !== null && numDisc !== 0) ? numDisc : '',
@@ -869,9 +941,31 @@ export default function Products() {
       brand: prod.brand || 'Apple',
       category: prod.category?._id || prod.category || '',
       sizes: Array.isArray(prod.sizes) ? prod.sizes : (prod.sizes ? [prod.sizes] : []),
-      bandSizes: (Array.isArray(prod.bandSizes) && prod.bandSizes.length > 0)
-        ? prod.bandSizes
-        : Array.from(new Set(prodVariants.map(v => v.bandSize).filter(Boolean))),
+      bandSizes: (() => {
+        if (Array.isArray(prod.bandSizes) && prod.bandSizes.length > 0) return prod.bandSizes;
+        const candidate = Array.isArray(prod.accessoriesSizes) ? prod.accessoriesSizes : (Array.isArray(prod.sizes) ? prod.sizes : []);
+        const mmSizes = candidate.filter(s => /mm$/i.test(s) || WATCH_BAND_SIZES.includes(s));
+        if (mmSizes.length > 0) return Array.from(new Set(mmSizes));
+        const varBand = prodVariants.map(v => v.bandSize).filter(Boolean);
+        if (varBand.length > 0) return Array.from(new Set(varBand));
+        return [];
+      })(),
+      strapSizes: (() => {
+        if (Array.isArray(prod.strapSizes) && prod.strapSizes.length > 0) return prod.strapSizes;
+        const candidate = Array.isArray(prod.accessoriesSizes) ? prod.accessoriesSizes : (Array.isArray(prod.sizes) ? prod.sizes : []);
+        const nonMmSizes = candidate.filter(s => !/mm$/i.test(s) && !WATCH_BAND_SIZES.includes(s));
+        if (nonMmSizes.length > 0) return Array.from(new Set(nonMmSizes));
+        const varStrap = prodVariants.map(v => v.strapSize).filter(Boolean);
+        if (varStrap.length > 0) return Array.from(new Set(varStrap));
+        return [];
+      })(),
+      isWatchBand: Boolean(
+        (Array.isArray(prod.bandSizes) && prod.bandSizes.length > 0) ||
+        (Array.isArray(prod.strapSizes) && prod.strapSizes.length > 0) ||
+        (Array.isArray(prod.accessoriesSizes) && prod.accessoriesSizes.length > 0) ||
+        (/\b(watch\s*band|sport\s*band|ocean\s*band|milanese|sport\s*loop|solo\s*loop|alpine\s*loop|trail\s*loop|braided\s*solo|link\s*bracelet|modern\s*buckle|watch\s*strap)\b/i.test(prod.title || '')) ||
+        (/(\bband\b|\bloop\b)/i.test(prod.title || '') && !/head|cushion/i.test(prod.title || ''))
+      ),
       connectivities: (Array.isArray(prod.connectivities) && prod.connectivities.length > 0)
         ? prod.connectivities
         : Array.from(new Set(prodVariants.map(v => v.connectivity).filter(Boolean))),
@@ -931,6 +1025,9 @@ export default function Products() {
       brand: 'Apple',
       category: '',
       sizes: [],
+      bandSizes: [],
+      strapSizes: [],
+      isWatchBand: false,
       colors: [],
       storage: [],
       ram: [],
@@ -994,8 +1091,9 @@ export default function Products() {
         ram: prev.ram?.[0] || '',
         size: prev.sizes?.[0] || '',
         bandSize: prev.bandSizes?.[0] || '',
+        strapSize: prev.strapSizes?.[0] || '',
         connectivity: prev.connectivities?.[0] || '',
-        accessoriesSize: '',
+        accessoriesSize: prev.strapSizes?.[0] || '',
         glass: prev.glasses?.[0] || '',
         processor: prev.processors?.[0] || '',
         displayTitle: '',
@@ -1779,118 +1877,204 @@ export default function Products() {
                   const selectedCatObj = categories.find(c => c._id === productForm.category || c.slug === productForm.category || c.name === productForm.category);
                   const selectedCatSlug = (selectedCatObj?.slug || selectedCatObj?.name || productForm.category || '').toString().toLowerCase();
                   const isWatchCategory = selectedCatSlug.includes('watch') || selectedCatSlug.includes('wearable');
+                  const isAccessoriesCategory = selectedCatSlug.includes('accessori');
+                  const isWatchBand = checkIsWatchBand(productForm, selectedCatSlug);
 
                   return (
                     <div className="border-t border-zinc-150 pt-4 space-y-4">
-                      {/* Case Size Options */}
-                      <VariantTagInput
-                        label={isWatchCategory ? "Case Size Options (Watch)" : "Sizes Config Options"}
-                        placeholder={isWatchCategory ? "e.g. 42mm, 46mm, 49mm" : "e.g. 14-inch, 16-inch"}
-                        tags={productForm.sizes || []}
-                        onChange={(tags) => {
-                          const removed = (productForm.sizes || []).filter(t => !tags.includes(t));
-                          let updatedVariants = [...(productForm.variants || [])];
-                          if (removed.length > 0) {
-                            updatedVariants = updatedVariants.map(v => {
-                              if (removed.includes(v.size)) {
-                                return { ...v, size: '' };
-                              }
-                              return v;
-                            });
-                          }
-                          setProductForm({ ...productForm, sizes: tags, variants: updatedVariants });
-                        }}
-                      />
-
-                      {/* Band Size Options (Watch only) */}
-                      {isWatchCategory && (
-                        <>
+                      {isAccessoriesCategory && (
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 border border-zinc-200">
                           <div>
-                            <VariantTagInput
-                              label="Band Size Options (Watch)"
-                              placeholder="e.g. S/M, M/L, Loop"
-                              tags={productForm.bandSizes || []}
-                              onChange={(tags) => {
-                                const removed = (productForm.bandSizes || []).filter(t => !tags.includes(t));
-                                let updatedVariants = [...(productForm.variants || [])];
-                                if (removed.length > 0) {
-                                  updatedVariants = updatedVariants.map(v => {
-                                    if (removed.includes(v.bandSize)) {
-                                      return { ...v, bandSize: '' };
-                                    }
-                                    return v;
-                                  });
-                                }
-                                setProductForm({ ...productForm, bandSizes: tags, variants: updatedVariants });
+                            <span className="text-xs font-bold text-zinc-800">Watch Band Accessory</span>
+                            <p className="text-[11px] text-zinc-500">Enable Watch Band size options for this accessory</p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(isWatchBand)}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setProductForm(prev => ({
+                                  ...prev,
+                                  isWatchBand: checked,
+                                  bandSizes: checked ? (prev.bandSizes && prev.bandSizes.length > 0 ? prev.bandSizes : []) : [],
+                                  strapSizes: checked ? (prev.strapSizes && prev.strapSizes.length > 0 ? prev.strapSizes : []) : []
+                                }));
                               }}
+                              className="sr-only peer"
                             />
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                              <span className="text-[10px] text-zinc-400 font-semibold self-center">Quick add:</span>
-                              {['S', 'M', 'L', 'S/M', 'M/L', 'Loop', 'Solo Loop', 'Sport Loop', 'Alpine Loop', 'Trail Loop', 'Ocean Band'].map(preset => (
+                            <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0071e3]"></div>
+                          </label>
+                        </div>
+                      )}
+
+                      {/* Case Size Options */}
+                      {!isWatchBand && (
+                        <VariantTagInput
+                          label={isWatchCategory ? "Case Size Options (Watch)" : "Sizes Config Options"}
+                          placeholder={isWatchCategory ? "e.g. 42mm, 46mm, 49mm" : "e.g. 14-inch, 16-inch"}
+                          tags={productForm.sizes || []}
+                          onChange={(tags) => {
+                            const removed = (productForm.sizes || []).filter(t => !tags.includes(t));
+                            let updatedVariants = [...(productForm.variants || [])];
+                            if (removed.length > 0) {
+                              updatedVariants = updatedVariants.map(v => {
+                                if (removed.includes(v.size)) {
+                                  return { ...v, size: '' };
+                                }
+                                return v;
+                              });
+                            }
+                            setProductForm({ ...productForm, sizes: tags, variants: updatedVariants });
+                          }}
+                        />
+                      )}
+
+                      {/* Option 1: Band Size Options (Watch & Watch Bands) */}
+                      {(isWatchCategory || isWatchBand) && (
+                        <div className="p-3.5 rounded-xl bg-zinc-50/70 border border-zinc-200/80 space-y-2">
+                          <VariantTagInput
+                            label={isAccessoriesCategory ? "1. Band Size Options (mm)" : "Band Size Options (Watch)"}
+                            placeholder="e.g. 40mm, 41mm, 42mm, 46mm, 49mm"
+                            tags={productForm.bandSizes || []}
+                            onChange={(tags) => {
+                              const removed = (productForm.bandSizes || []).filter(t => !tags.includes(t));
+                              let updatedVariants = [...(productForm.variants || [])];
+                              if (removed.length > 0) {
+                                updatedVariants = updatedVariants.map(v => {
+                                  if (removed.includes(v.bandSize)) {
+                                    return { ...v, bandSize: '' };
+                                  }
+                                  return v;
+                                });
+                              }
+                              setProductForm({ ...productForm, bandSizes: tags, variants: updatedVariants });
+                            }}
+                          />
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            <span className="text-[10px] text-zinc-400 font-semibold self-center">Quick add:</span>
+                            {WATCH_BAND_SIZES.map(preset => {
+                              const isSelected = (productForm.bandSizes || []).includes(preset);
+                              return (
                                 <button
                                   key={preset}
                                   type="button"
                                   onClick={() => {
                                     const current = productForm.bandSizes || [];
-                                    if (!current.includes(preset)) {
+                                    if (isSelected) {
+                                      setProductForm({ ...productForm, bandSizes: current.filter(s => s !== preset) });
+                                    } else {
                                       setProductForm({ ...productForm, bandSizes: [...current, preset] });
                                     }
                                   }}
                                   className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-all cursor-pointer ${
-                                    (productForm.bandSizes || []).includes(preset)
+                                    isSelected
                                       ? 'bg-blue-50 border-blue-300 text-blue-700'
-                                      : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100 hover:border-zinc-300'
+                                      : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-100 hover:border-zinc-300'
                                   }`}
                                 >
-                                  + {preset}
+                                  {isSelected ? '✓ ' : '+ '}{preset}
                                 </button>
-                              ))}
-                            </div>
+                              );
+                            })}
                           </div>
+                        </div>
+                      )}
 
-                          <div>
-                            <VariantTagInput
-                              label="Connectivity Options (Watch)"
-                              placeholder="e.g. GPS, GPS + Cellular"
-                              tags={productForm.connectivities || []}
-                              onChange={(tags) => {
-                                const removed = (productForm.connectivities || []).filter(t => !tags.includes(t));
-                                let updatedVariants = [...(productForm.variants || [])];
-                                if (removed.length > 0) {
-                                  updatedVariants = updatedVariants.map(v => {
-                                    if (removed.includes(v.connectivity)) {
-                                      return { ...v, connectivity: '', displayTitle: '', title: '' };
-                                    }
-                                    return v;
-                                  });
-                                }
-                                setProductForm({ ...productForm, connectivities: tags, variants: updatedVariants });
-                              }}
-                            />
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                              <span className="text-[10px] text-zinc-400 font-semibold self-center">Quick add:</span>
-                              {['GPS', 'GPS + Cellular'].map(preset => (
+                      {/* Option 2: Strap Size Options (Watch Bands & Watches) */}
+                      {(isWatchCategory || isWatchBand) && (
+                        <div className="p-3.5 rounded-xl bg-zinc-50/70 border border-zinc-200/80 space-y-2">
+                          <VariantTagInput
+                            label={isAccessoriesCategory ? "2. Strap Size Options" : "Strap Size Options (Watch)"}
+                            placeholder="e.g. S/M, M/L, Small, Medium, Large, Loop"
+                            tags={productForm.strapSizes || []}
+                            onChange={(tags) => {
+                              const removed = (productForm.strapSizes || []).filter(t => !tags.includes(t));
+                              let updatedVariants = [...(productForm.variants || [])];
+                              if (removed.length > 0) {
+                                updatedVariants = updatedVariants.map(v => {
+                                  if (removed.includes(v.strapSize)) {
+                                    return { ...v, strapSize: '' };
+                                  }
+                                  return v;
+                                });
+                              }
+                              setProductForm({ ...productForm, strapSizes: tags, variants: updatedVariants });
+                            }}
+                          />
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            <span className="text-[10px] text-zinc-400 font-semibold self-center">Quick add:</span>
+                            {WATCH_STRAP_SIZES.map(preset => {
+                              const isSelected = (productForm.strapSizes || []).includes(preset);
+                              return (
                                 <button
                                   key={preset}
                                   type="button"
                                   onClick={() => {
-                                    const current = productForm.connectivities || [];
-                                    if (!current.includes(preset)) {
-                                      setProductForm({ ...productForm, connectivities: [...current, preset] });
+                                    const current = productForm.strapSizes || [];
+                                    if (isSelected) {
+                                      setProductForm({ ...productForm, strapSizes: current.filter(s => s !== preset) });
+                                    } else {
+                                      setProductForm({ ...productForm, strapSizes: [...current, preset] });
                                     }
                                   }}
                                   className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-all cursor-pointer ${
-                                    (productForm.connectivities || []).includes(preset)
-                                      ? 'bg-blue-50 border-blue-300 text-blue-700'
-                                      : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100 hover:border-zinc-300'
+                                    isSelected
+                                      ? 'bg-purple-50 border-purple-300 text-purple-700'
+                                      : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-100 hover:border-zinc-300'
                                   }`}
                                 >
-                                  + {preset}
+                                  {isSelected ? '✓ ' : '+ '}{preset}
                                 </button>
-                              ))}
-                            </div>
+                              );
+                            })}
                           </div>
-                        </>
+                        </div>
+                      )}
+
+                      {isWatchCategory && !isAccessoriesCategory && (
+                        <div>
+                          <VariantTagInput
+                            label="Connectivity Options (Watch)"
+                            placeholder="e.g. GPS, GPS + Cellular"
+                            tags={productForm.connectivities || []}
+                            onChange={(tags) => {
+                              const removed = (productForm.connectivities || []).filter(t => !tags.includes(t));
+                              let updatedVariants = [...(productForm.variants || [])];
+                              if (removed.length > 0) {
+                                updatedVariants = updatedVariants.map(v => {
+                                  if (removed.includes(v.connectivity)) {
+                                    return { ...v, connectivity: '', displayTitle: '', title: '' };
+                                  }
+                                  return v;
+                                });
+                              }
+                              setProductForm({ ...productForm, connectivities: tags, variants: updatedVariants });
+                            }}
+                          />
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            <span className="text-[10px] text-zinc-400 font-semibold self-center">Quick add:</span>
+                            {['GPS', 'GPS + Cellular'].map(preset => (
+                              <button
+                                key={preset}
+                                type="button"
+                                onClick={() => {
+                                  const current = productForm.connectivities || [];
+                                  if (!current.includes(preset)) {
+                                    setProductForm({ ...productForm, connectivities: [...current, preset] });
+                                  }
+                                }}
+                                className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-all cursor-pointer ${
+                                  (productForm.connectivities || []).includes(preset)
+                                    ? 'bg-blue-50 border-blue-300 text-blue-700'
+                                    : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100 hover:border-zinc-300'
+                                }`}
+                              >
+                                + {preset}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       )}
 
                       {/* Colors Config Options */}
@@ -1938,6 +2122,15 @@ export default function Products() {
                             <Plus className="h-3.5 w-3.5" />
                             Generate Watch Variants (Color + Case Size + Band Size + Connectivity)
                           </button>
+                        ) : isWatchBand ? (
+                          <button
+                            type="button"
+                            onClick={handleAutoGenerateWatchVariants}
+                            className="text-xs font-bold text-rose-700 hover:text-rose-800 bg-rose-50 border border-rose-200 px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Generate Watch Band Variants (Color + Band Size + Strap Size)
+                          </button>
                         ) : (
                           <button
                             type="button"
@@ -1951,7 +2144,7 @@ export default function Products() {
                       </div>
 
                       {/* Non-Watch fields (Storage, RAM, Processor, Glass finish) */}
-                      {!isWatchCategory && (
+                      {!isWatchCategory && !isWatchBand && (
                         <>
                           <VariantTagInput
                             label="Storage Options"
@@ -2068,6 +2261,8 @@ export default function Products() {
                       const selectedCatObj = categories.find(c => c._id === productForm.category || c.slug === productForm.category || c.name === productForm.category);
                       const selectedCatSlug = (selectedCatObj?.slug || selectedCatObj?.name || productForm.category || '').toString().toLowerCase();
                       const isWatchCategory = selectedCatSlug.includes('watch') || selectedCatSlug.includes('wearable');
+                      const isAccessoriesCategory = selectedCatSlug.includes('accessori');
+                      const isWatchBand = checkIsWatchBand(productForm, selectedCatSlug);
                       const variantKey = v.id || v._id || `variant-${vIdx}`;
 
                       return (
@@ -2079,7 +2274,7 @@ export default function Products() {
                               <GripVertical className="h-4 w-4 text-zinc-400 cursor-grab" />
                               <span className="text-[11px] font-extrabold text-zinc-800 uppercase tracking-wide flex items-center gap-2 font-mono">
                                 <span className="inline-block w-3.5 h-3.5 rounded-full border border-zinc-300 shrink-0 shadow-2xs" style={{ backgroundColor: resolveColorValue(v.colorHex || v.color) }} />
-                                <span>#{vIdx + 1}: {v.color || 'Color'} {v.colorHex ? `(${v.colorHex})` : ''} {v.accessoriesSize && v.accessoriesSize !== 'None' ? `| Size: ${v.accessoriesSize}` : ''} {v.size ? `| ${v.size}` : ''} {v.bandSize ? `| Band: ${v.bandSize}` : ''} {v.connectivity ? `| ${v.connectivity}` : ''} {!isWatchCategory && v.ram ? `| ${v.ram}` : ''} {!isWatchCategory && v.storage ? `| ${v.storage}` : ''} {v.partNumber ? `| MPN: ${v.partNumber}` : ''} {v.sku ? `| SKU: ${v.sku}` : ''} {v.price ? `| ₹${Number(v.price).toLocaleString('en-IN')}` : ''}</span>
+                                <span>#{vIdx + 1}: {v.color || 'Color'} {v.colorHex ? `(${v.colorHex})` : ''} {v.bandSize ? `| Band: ${v.bandSize}` : ''} {v.strapSize ? `| Strap: ${v.strapSize}` : (v.accessoriesSize && v.accessoriesSize !== 'None' ? `| Size: ${v.accessoriesSize}` : '')} {v.size && v.size !== v.bandSize ? `| ${v.size}` : ''} {v.connectivity ? `| ${v.connectivity}` : ''} {!isWatchCategory && !isWatchBand && v.ram ? `| ${v.ram}` : ''} {!isWatchCategory && !isWatchBand && v.storage ? `| ${v.storage}` : ''} {v.partNumber ? `| MPN: ${v.partNumber}` : ''} {v.sku ? `| SKU: ${v.sku}` : ''} {v.price ? `| ₹${Number(v.price).toLocaleString('en-IN')}` : ''}</span>
                                 {vIdx === 0 && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-sans">Default</span>}
                               </span>
                             </div>
@@ -2208,29 +2403,68 @@ export default function Products() {
                                   <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Band Size</label>
                                   <div className="flex gap-1.5 items-center">
                                     <select
-                                      value={['S', 'M', 'L', 'S/M', 'M/L', 'Loop', 'Solo Loop', 'Sport Loop', 'Alpine Loop', 'Milanese Loop', 'Trail Loop', 'Ocean Band'].includes(v.bandSize) ? v.bandSize : ''}
+                                      value={v.bandSize || ''}
                                       onChange={(e) => handleUpdateVariant(vIdx, { bandSize: e.target.value })}
                                       className="px-2 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-bold text-zinc-900 shrink-0 cursor-pointer shadow-xs"
                                     >
                                       <option value="">Select Band</option>
-                                      <option value="S">S</option>
-                                      <option value="M">M</option>
-                                      <option value="L">L</option>
-                                      <option value="S/M">S/M</option>
-                                      <option value="M/L">M/L</option>
-                                      <option value="Loop">Loop</option>
-                                      <option value="Solo Loop">Solo Loop</option>
-                                      <option value="Sport Loop">Sport Loop</option>
-                                      <option value="Alpine Loop">Alpine Loop</option>
-                                      <option value="Milanese Loop">Milanese Loop</option>
-                                      <option value="Trail Loop">Trail Loop</option>
-                                      <option value="Ocean Band">Ocean Band</option>
+                                      {Array.from(new Set([...WATCH_BAND_SIZES, ...(productForm.bandSizes || [])])).map(sz => (
+                                        <option key={sz} value={sz}>{sz}</option>
+                                      ))}
                                     </select>
                                     <input
                                       type="text"
-                                      placeholder="e.g. S, M, L, S/M or Loop"
+                                      placeholder="e.g. 40mm, S/M, Loop"
                                       value={v.bandSize || ''}
                                       onChange={(e) => handleUpdateVariant(vIdx, { bandSize: e.target.value })}
+                                      className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium"
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            ) : isWatchBand ? (
+                              <>
+                                <div>
+                                  <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Band Size (mm)</label>
+                                  <div className="flex gap-1.5 items-center">
+                                    <select
+                                      value={v.bandSize || ''}
+                                      onChange={(e) => handleUpdateVariant(vIdx, { bandSize: e.target.value, size: e.target.value })}
+                                      className="px-2 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-bold text-zinc-900 shrink-0 cursor-pointer shadow-xs"
+                                    >
+                                      <option value="">Select Band</option>
+                                      {Array.from(new Set([...WATCH_BAND_SIZES, ...(productForm.bandSizes || [])])).map(sz => (
+                                        <option key={sz} value={sz}>{sz}</option>
+                                      ))}
+                                    </select>
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. 40mm, 42mm"
+                                      value={v.bandSize || ''}
+                                      onChange={(e) => handleUpdateVariant(vIdx, { bandSize: e.target.value, size: e.target.value })}
+                                      className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Strap Size</label>
+                                  <div className="flex gap-1.5 items-center">
+                                    <select
+                                      value={v.strapSize || ''}
+                                      onChange={(e) => handleUpdateVariant(vIdx, { strapSize: e.target.value, accessoriesSize: e.target.value })}
+                                      className="px-2 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-bold text-zinc-900 shrink-0 cursor-pointer shadow-xs"
+                                    >
+                                      <option value="">Select Strap</option>
+                                      {Array.from(new Set([...WATCH_STRAP_SIZES, ...(productForm.strapSizes || [])])).map(sz => (
+                                        <option key={sz} value={sz}>{sz}</option>
+                                      ))}
+                                    </select>
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. S/M, M/L, Loop"
+                                      value={v.strapSize || ''}
+                                      onChange={(e) => handleUpdateVariant(vIdx, { strapSize: e.target.value, accessoriesSize: e.target.value })}
                                       className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-medium"
                                     />
                                   </div>
@@ -2284,21 +2518,23 @@ export default function Products() {
                               </>
                             )}
 
-                            <div>
-                              <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Accessories Size</label>
-                              <select
-                                value={v.accessoriesSize || ''}
-                                onChange={(e) => handleUpdateVariant(vIdx, { accessoriesSize: e.target.value })}
-                                className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-bold text-zinc-900 cursor-pointer shadow-xs"
-                              >
-                                <option value="">None / Not Applicable</option>
-                                <option value="XXS">XXS</option>
-                                <option value="XS">XS</option>
-                                <option value="Small">Small</option>
-                                <option value="Medium">Medium</option>
-                                <option value="Large">Large</option>
-                              </select>
-                            </div>
+                            {!isWatchBand && (
+                              <div>
+                                <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Accessories Size</label>
+                                <select
+                                  value={v.accessoriesSize || ''}
+                                  onChange={(e) => handleUpdateVariant(vIdx, { accessoriesSize: e.target.value })}
+                                  className="w-full px-3 py-2.5 rounded-xl border border-zinc-200 focus:border-[#0071e3] outline-none text-xs bg-white font-bold text-zinc-900 cursor-pointer shadow-xs"
+                                >
+                                  <option value="">None / Not Applicable</option>
+                                  <option value="XXS">XXS</option>
+                                  <option value="XS">XS</option>
+                                  <option value="Small">Small</option>
+                                  <option value="Medium">Medium</option>
+                                  <option value="Large">Large</option>
+                                </select>
+                              </div>
+                            )}
 
                             <div>
                               <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Part No. / MPN</label>

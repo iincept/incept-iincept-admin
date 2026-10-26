@@ -93,6 +93,7 @@ export default function HeroBanners() {
                 ...s, 
                 badge: s.badge || 'APPLE AUTHORISED RESELLERS ACROSS INDIA',
                 isActive: s.isActive !== false,
+                isMobileActive: s.isMobileActive !== false,
                 hideText: s.hideText !== false,
                 imageFit: s.imageFit || 'cover',
                 focalPosition: s.focalPosition || 'center',
@@ -123,6 +124,7 @@ export default function HeroBanners() {
                   secondaryButtonLink: "#store-locator",
                   image: "",
                   mobileImage: "",
+                  isMobileActive: true,
                   imageFit: "cover",
                   focalPosition: "center",
                   textAlignment: "left",
@@ -176,6 +178,7 @@ export default function HeroBanners() {
           secondaryButtonLink: "#store-locator",
           image: "",
           mobileImage: "",
+          isMobileActive: true,
           imageFit: "cover",
           focalPosition: "center",
           textAlignment: "left",
@@ -231,6 +234,29 @@ export default function HeroBanners() {
       };
       return { ...prev, heroSlides: updatedSlides };
     });
+  };
+
+  const handleToggleMobileActive = async (index) => {
+    const updatedSlides = [...siteForm.heroSlides];
+    const currentActive = updatedSlides[index].isMobileActive !== false;
+    const newActive = !currentActive;
+    updatedSlides[index] = {
+      ...updatedSlides[index],
+      isMobileActive: newActive
+    };
+    const updatedForm = { ...siteForm, heroSlides: updatedSlides };
+    setSiteForm(updatedForm);
+    try {
+      await axiosClient.put('/settings', updatedForm);
+      notifyAdminChange('settings', { action: 'update_banner_image' });
+      showSuccessMessage(
+        newActive 
+          ? `Slide #${index + 1} mobile banner activated!` 
+          : `Slide #${index + 1} mobile banner deactivated (now using desktop banner on mobile).`
+      );
+    } catch (err) {
+      console.error('Failed to toggle mobile banner active state:', err);
+    }
   };
 
   const handleMoveToFirst = (index) => {
@@ -334,6 +360,7 @@ export default function HeroBanners() {
         updatedSlides[index] = {
           ...updatedSlides[index],
           [fieldName]: uploadedUrl,
+          ...(fieldName === 'mobileImage' ? { isMobileActive: true } : {}),
           hideText: true,
           imageFit: 'cover'
         };
@@ -360,6 +387,7 @@ export default function HeroBanners() {
         updatedSlides[index] = {
           ...updatedSlides[index],
           [fieldName]: base64Url,
+          ...(fieldName === 'mobileImage' ? { isMobileActive: true } : {}),
           hideText: true,
           imageFit: 'cover'
         };
@@ -384,10 +412,14 @@ export default function HeroBanners() {
   };
 
   const handleRemoveSlideImage = async (index, fieldName = 'image') => {
+    if (!window.confirm(`Are you sure you want to delete this ${fieldName === 'mobileImage' ? 'mobile' : 'desktop'} banner image?`)) {
+      return;
+    }
     const updatedSlides = [...siteForm.heroSlides];
     updatedSlides[index] = {
       ...updatedSlides[index],
-      [fieldName]: ''
+      [fieldName]: '',
+      ...(fieldName === 'mobileImage' ? { isMobileActive: true } : {})
     };
     const updatedForm = {
       ...siteForm,
@@ -398,7 +430,7 @@ export default function HeroBanners() {
     try {
       await axiosClient.put('/settings', updatedForm);
       notifyAdminChange('settings', { action: 'remove_banner_image' });
-      showSuccessMessage('Banner image removed & published live!');
+      showSuccessMessage(`${fieldName === 'mobileImage' ? 'Mobile' : 'Desktop'} banner image deleted & published live!`);
     } catch (err) {
       console.error('Failed to auto-save image removal:', err);
     }
@@ -665,7 +697,8 @@ export default function HeroBanners() {
                 : previewSlide.focalPosition === 'left'
                 ? 'object-left'
                 : 'object-right';
-              const imgUrl = previewMode === 'mobile' && previewSlide.mobileImage 
+              const hasMobileImg = Boolean(previewSlide.mobileImage && previewSlide.isMobileActive !== false);
+              const imgUrl = (previewMode === 'mobile' && hasMobileImg)
                 ? previewSlide.mobileImage 
                 : previewSlide.image;
 
@@ -776,13 +809,26 @@ export default function HeroBanners() {
                       <div className="w-[340px] sm:w-[380px] min-h-[460px] rounded-[32px] border-4 border-zinc-700 bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] text-zinc-900 relative overflow-hidden shadow-2xl flex flex-col justify-between p-5">
                         <div className="w-20 h-4 bg-zinc-800 rounded-full mx-auto mb-2"></div>
                         
+                        {/* Status indicator on simulator */}
+                        <div className="flex justify-center mb-2">
+                          {hasMobileImg ? (
+                            <span className="bg-emerald-600/90 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs shadow-xs">
+                              <Smartphone className="h-3 w-3" /> Showing Mobile Banner
+                            </span>
+                          ) : (
+                            <span className="bg-zinc-800/90 text-zinc-300 text-[10px] font-medium px-2.5 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs">
+                              <Monitor className="h-3 w-3" /> Using Desktop Banner Fallback
+                            </span>
+                          )}
+                        </div>
+
                         {previewSlide.hideText !== false ? (
-                          <div className="flex-1 flex items-center justify-center relative">
-                            {(previewSlide.mobileImage || imgUrl) ? (
+                          <div className="flex-1 flex items-center justify-center relative overflow-hidden rounded-xl">
+                            {imgUrl ? (
                               <img
-                                src={previewSlide.mobileImage || imgUrl}
+                                src={imgUrl}
                                 alt="Banner"
-                                className="w-full h-full max-h-[380px] object-contain drop-shadow-lg"
+                                className="w-full h-full max-h-[380px] object-cover drop-shadow-lg rounded-xl"
                               />
                             ) : (
                               <p className="text-zinc-400 text-xs">No image uploaded</p>
@@ -867,6 +913,16 @@ export default function HeroBanners() {
                       {slide.image && (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
                           <ImageIcon className="h-3 w-3" /> Image Banner
+                        </span>
+                      )}
+
+                      {slide.mobileImage && (
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md ${
+                          slide.isMobileActive !== false 
+                            ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' 
+                            : 'text-zinc-600 bg-zinc-100 border border-zinc-200'
+                        }`}>
+                          <Smartphone className="h-3 w-3" /> {slide.isMobileActive !== false ? 'Mobile Banner Active' : 'Mobile Banner Paused'}
                         </span>
                       )}
 
@@ -1156,12 +1212,12 @@ export default function HeroBanners() {
                     <div className="space-y-1">
                       <label className="block text-[10px] font-bold text-zinc-700 uppercase tracking-wider">Image Focal Position</label>
                       <select
-                        value={slide.focalPosition || 'right'}
+                        value={slide.focalPosition || 'center'}
                         onChange={(e) => handleSlideChange(index, 'focalPosition', e.target.value)}
                         className="w-full px-3 py-2 bg-white rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none"
                       >
-                        <option value="right">Right Aligned (Apple default hero layout)</option>
-                        <option value="center">Center Aligned</option>
+                        <option value="center">Center Aligned (Default & Recommended)</option>
+                        <option value="right">Right Aligned</option>
                         <option value="left">Left Aligned</option>
                       </select>
                     </div>
@@ -1260,63 +1316,235 @@ export default function HeroBanners() {
                       </div>
                     </div>
 
-                    {/* Mobile Banner Image (Optional) */}
-                    <div className="md:col-span-2 space-y-1 bg-white p-3.5 rounded-xl border border-zinc-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <div>
-                          <label className="block text-[10px] font-bold text-zinc-800 uppercase tracking-wider">
-                            Mobile Banner Image (Optional, for 390px phone screens)
-                          </label>
-                          <p className="text-[10px] text-zinc-400">
-                            Leave empty to automatically use desktop image with responsive mobile scaling.
+                    {/* Mobile Banner Image Section */}
+                    <div className="md:col-span-2 space-y-3 bg-gradient-to-br from-zinc-50 to-white p-4 rounded-2xl border border-zinc-200/90 shadow-2xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200/60 pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#0071e3] flex items-center justify-center font-bold">
+                            <Smartphone className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs font-bold text-zinc-900 uppercase tracking-wider">
+                                Mobile Banner Image
+                              </label>
+                              <span className="text-[10px] text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-full font-medium">
+                                390px phone screens
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-500">
+                              Upload a portrait/vertical banner tailored for mobile screens. If not uploaded or deactivated, the desktop banner is automatically used.
+                            </p>
+                          </div>
+                        </div>
+
+                        {slide.mobileImage && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleMobileActive(index)}
+                              className={`flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full border transition-all cursor-pointer ${
+                                slide.isMobileActive !== false
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                                  : 'bg-zinc-100 text-zinc-600 border-zinc-300 hover:bg-zinc-200'
+                              }`}
+                              title="Toggle Mobile Banner visibility on mobile devices"
+                            >
+                              {slide.isMobileActive !== false ? (
+                                <>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                  Active on Mobile
+                                </>
+                              ) : (
+                                <>
+                                  <EyeOff className="h-3 w-3 text-zinc-500" />
+                                  Deactivated (Fallback Active)
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Preview Thumbnail & Controls */}
+                      {slide.mobileImage ? (
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-white p-3 rounded-xl border border-zinc-200">
+                          {/* Thumbnail image */}
+                          <div className="relative w-24 h-32 sm:w-28 sm:h-36 shrink-0 rounded-lg overflow-hidden border border-zinc-200 bg-zinc-100 shadow-xs flex items-center justify-center group">
+                            <img
+                              src={slide.mobileImage}
+                              alt={`Slide ${index + 1} Mobile Banner Preview`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedPreviewIndex(index);
+                                  setPreviewMode('mobile');
+                                  window.scrollTo({ top: 300, behavior: 'smooth' });
+                                }}
+                                className="p-1.5 bg-white text-zinc-900 rounded-full shadow-md text-[10px] font-bold hover:scale-105 transition-transform cursor-pointer"
+                                title="Preview in Mobile Simulator"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] font-mono px-1 py-0.5 rounded">
+                              Mobile
+                            </span>
+                          </div>
+
+                          {/* Info & action buttons */}
+                          <div className="flex-1 space-y-2.5 w-full">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                                  slide.isMobileActive !== false
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {slide.isMobileActive !== false ? 'Live on Mobile' : 'Deactivated (Fallback Active)'}
+                                </span>
+                                <span className="text-[11px] text-zinc-500 truncate max-w-[200px] sm:max-w-xs font-mono">
+                                  {slide.mobileImage.startsWith('data:') ? 'Base64 Encoded Image' : slide.mobileImage}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Input for direct URL editing */}
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={slide.mobileImage || ''}
+                                onChange={(e) => handleSlideChange(index, 'mobileImage', e.target.value)}
+                                onBlur={async () => {
+                                  try {
+                                    await axiosClient.put('/settings', siteForm);
+                                    notifyAdminChange('settings', { action: 'update_banner_image' });
+                                    showSuccessMessage(`Slide #${index + 1} mobile banner URL saved live!`);
+                                  } catch (err) {
+                                    console.error('Auto-save on blur failed:', err);
+                                  }
+                                }}
+                                placeholder="Mobile image URL or upload file..."
+                                className="flex-1 px-3 py-1.5 bg-zinc-50 rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none font-sans"
+                              />
+                            </div>
+
+                            {/* Action Buttons: Replace, Toggle Active, Simulator Preview, Delete */}
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              {/* Replace file input */}
+                              <label className="flex items-center gap-1.5 bg-zinc-900 hover:bg-black text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-xs">
+                                {uploadingIndex === `${index}-mobileImage` ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
+                                ) : (
+                                  <Upload className="h-3.5 w-3.5" />
+                                )}
+                                Replace Image
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => handleBannerImageUpload(index, e, 'mobileImage')}
+                                />
+                              </label>
+
+                              {/* Toggle Active Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleMobileActive(index)}
+                                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                                  slide.isMobileActive !== false
+                                    ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-300'
+                                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-300'
+                                }`}
+                              >
+                                {slide.isMobileActive !== false ? (
+                                  <>
+                                    <EyeOff className="h-3.5 w-3.5" />
+                                    Deactivate
+                                  </>
+                                ) : (
+                                  <>
+                                    <Eye className="h-3.5 w-3.5" />
+                                    Activate
+                                  </>
+                                )}
+                              </button>
+
+                              {/* Preview in simulator */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedPreviewIndex(index);
+                                  setPreviewMode('mobile');
+                                  window.scrollTo({ top: 300, behavior: 'smooth' });
+                                }}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer"
+                              >
+                                <Smartphone className="h-3.5 w-3.5" />
+                                Simulator Preview
+                              </button>
+
+                              {/* Delete mobile banner */}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSlideImage(index, 'mobileImage')}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer ml-auto"
+                                title="Delete Mobile Banner (Falls back to Desktop Banner)"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete Mobile Banner
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Empty State: Upload or enter URL */
+                        <div className="space-y-2 bg-white p-3.5 rounded-xl border border-dashed border-zinc-250">
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                            <input
+                              type="text"
+                              value={slide.mobileImage || ''}
+                              onChange={(e) => handleSlideChange(index, 'mobileImage', e.target.value)}
+                              onBlur={async () => {
+                                try {
+                                  await axiosClient.put('/settings', siteForm);
+                                  notifyAdminChange('settings', { action: 'update_banner_image' });
+                                  if (slide.mobileImage) {
+                                    showSuccessMessage(`Slide #${index + 1} mobile banner URL saved live!`);
+                                  }
+                                } catch (err) {
+                                  console.error('Auto-save on blur failed:', err);
+                                }
+                              }}
+                              placeholder="Paste mobile banner image URL or upload image file..."
+                              className="flex-1 px-3 py-2 bg-zinc-50 rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none"
+                            />
+                            <label className="flex items-center justify-center gap-1.5 bg-[#0071e3] hover:bg-[#005bb5] text-white px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-xs whitespace-nowrap">
+                              {uploadingIndex === `${index}-mobileImage` ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
+                              ) : (
+                                <Upload className="h-3.5 w-3.5" />
+                              )}
+                              Upload Mobile Banner
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => handleBannerImageUpload(index, e, 'mobileImage')}
+                              />
+                            </label>
+                          </div>
+                          <p className="text-[11px] text-zinc-400">
+                            💡 Recommended mobile banner aspect ratio: 9:16 or 4:5 (e.g. 1080×1920 or 750×1000 px). If not set, desktop banner is scaled automatically.
                           </p>
                         </div>
-                        {slide.mobileImage && (
-                          <span className="text-[10px] text-emerald-600 font-semibold">Active</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={slide.mobileImage || ''}
-                          onChange={(e) => handleSlideChange(index, 'mobileImage', e.target.value)}
-                          onBlur={async () => {
-                            try {
-                              await axiosClient.put('/settings', siteForm);
-                              notifyAdminChange('settings', { action: 'update_banner_image' });
-                              showSuccessMessage(`Slide #${index + 1} mobile image URL saved live!`);
-                            } catch (err) {
-                              console.error('Auto-save on blur failed:', err);
-                            }
-                          }}
-                          placeholder="Mobile image URL or upload..."
-                          className="flex-1 px-3 py-2 bg-zinc-50 rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none"
-                        />
-                        <label className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-900 text-white px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-2xs">
-                          {uploadingIndex === `${index}-mobileImage` ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
-                          ) : (
-                            <Upload className="h-3.5 w-3.5" />
-                          )}
-                          Upload Mobile
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => handleBannerImageUpload(index, e, 'mobileImage')}
-                          />
-                        </label>
-                        {slide.mobileImage && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSlideImage(index, 'mobileImage')}
-                            className="p-2 text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg cursor-pointer"
-                            title="Remove Mobile Image"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>

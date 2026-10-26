@@ -10,7 +10,8 @@ import {
   Eye,
   Sliders,
   Layers,
-  Sparkles
+  Sparkles,
+  ChevronDown
 } from 'lucide-react';
 import axiosClient from '../../services/axiosClient';
 import { notifyAdminChange } from '../../services/liveSyncService';
@@ -36,12 +37,19 @@ export default function ProductAppleCareManager() {
       { categoryName: 'iPhone', monthlyPrice: 'From ₹1,483.00/mo.◊', mrpPrice: 'or MRP ₹8,900.00 (inclusive of all taxes)' },
       { categoryName: 'iPad', monthlyPrice: 'From ₹1,150.00/mo.◊', mrpPrice: 'or MRP ₹6,900.00 (inclusive of all taxes)' },
       { categoryName: 'Watch', monthlyPrice: 'From ₹750.00/mo.◊', mrpPrice: 'or MRP ₹4,500.00 (inclusive of all taxes)' },
-      { categoryName: 'AirPods', monthlyPrice: 'From ₹483.00/mo.◊', mrpPrice: 'or MRP ₹2,900.00 (inclusive of all taxes)' }
+      { categoryName: 'AirPods', monthlyPrice: 'From ₹483.00/mo.◊', mrpPrice: 'or MRP ₹2,900.00 (inclusive of all taxes)' },
+      { categoryName: 'TV & Home', monthlyPrice: 'From ₹483.00/mo.◊', mrpPrice: 'or MRP ₹2,900.00 (inclusive of all taxes)' }
+    ],
+    plans: [
+      { id: '1yr', name: 'AppleCare+ (1 Year Coverage)', price: 1999, duration: '1 Year', description: 'Official 1-Year hardware protection & accidental damage coverage', isActive: true },
+      { id: '2yr', name: 'AppleCare+ (2 Years Coverage)', price: 2900, duration: '2 Years', description: 'Full 2 Years protection with unlimited repairs & priority Apple support', isActive: true }
     ]
   });
 
   const [newFeatureText, setNewFeatureText] = useState('');
   const [newCategory, setNewCategory] = useState({ categoryName: '', monthlyPrice: '', mrpPrice: '' });
+  const [newPlan, setNewPlan] = useState({ name: '', price: '', duration: '2 Years', description: '' });
+  const [selectedPreviewPlan, setSelectedPreviewPlan] = useState('none');
   const [previewCategory, setPreviewCategory] = useState('Mac');
 
   useEffect(() => {
@@ -130,6 +138,42 @@ export default function ProductAppleCareManager() {
       ...prev,
       categoryPrices: prev.categoryPrices.filter((_, i) => i !== index)
     }));
+  };
+
+  const handleAddPlan = () => {
+    if (!newPlan.name.trim()) return;
+    const priceNum = parseInt(String(newPlan.price).replace(/[^0-9]/g, ''), 10) || 0;
+    const created = {
+      id: `plan-${Date.now()}`,
+      name: newPlan.name.trim(),
+      price: priceNum,
+      duration: newPlan.duration || '2 Years',
+      description: newPlan.description || '',
+      isActive: true
+    };
+    setProductAppleCare(prev => ({
+      ...prev,
+      plans: [...(prev.plans || []), created]
+    }));
+    setNewPlan({ name: '', price: '', duration: '2 Years', description: '' });
+  };
+
+  const handleRemovePlan = (index) => {
+    setProductAppleCare(prev => ({
+      ...prev,
+      plans: (prev.plans || []).filter((_, i) => i !== index)
+    }));
+  };
+
+  const handlePlanChange = (index, field, value) => {
+    setProductAppleCare(prev => {
+      const updated = [...(prev.plans || [])];
+      updated[index] = { 
+        ...updated[index], 
+        [field]: field === 'price' ? parseInt(String(value).replace(/[^0-9]/g, ''), 10) || 0 : value 
+      };
+      return { ...prev, plans: updated };
+    });
   };
 
   // Compute Active Preview Price
@@ -436,7 +480,111 @@ export default function ProductAppleCareManager() {
         </div>
       </div>
 
-      {/* 5. Live Storefront Card Preview Box */}
+      {/* 5. AppleCare+ Dropdown Plan Options */}
+      <div className="bg-white border border-zinc-200 rounded-2xl sm:rounded-3xl shadow-sm p-6 sm:p-8 space-y-6 w-full">
+        <div className="flex items-center gap-2.5 border-b border-zinc-100 pb-4">
+          <Layers className="w-5 h-5 text-[#0071e3]" />
+          <div>
+            <h2 className="text-lg font-bold text-zinc-900">Dropdown Plan Options</h2>
+            <p className="text-xs text-zinc-500">Configure coverage plans displayed in the product page AppleCare+ dropdown selector.</p>
+          </div>
+        </div>
+
+        {/* Plan List */}
+        <div className="space-y-3">
+          {(productAppleCare.plans || []).map((plan, idx) => (
+            <div key={idx} className="p-4 bg-zinc-50 border border-zinc-200 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <input
+                  type="text"
+                  value={plan.name}
+                  onChange={(e) => handlePlanChange(idx, 'name', e.target.value)}
+                  placeholder="Plan Name (e.g. AppleCare+ 2 Years)"
+                  className="bg-white border border-zinc-200 rounded-xl px-3 py-1.5 text-xs font-bold text-[#0071e3] focus:outline-none focus:border-[#0071e3] flex-1 mr-3"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemovePlan(idx)}
+                  className="p-1.5 rounded-lg hover:bg-rose-100 text-zinc-400 hover:text-rose-600 transition-all cursor-pointer border-0"
+                  title="Remove Plan"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-500 mb-1">Price (₹)</label>
+                  <input
+                    type="number"
+                    value={plan.price}
+                    onChange={(e) => handlePlanChange(idx, 'price', e.target.value)}
+                    placeholder="e.g. 2900"
+                    className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:border-[#0071e3]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-500 mb-1">Duration</label>
+                  <input
+                    type="text"
+                    value={plan.duration}
+                    onChange={(e) => handlePlanChange(idx, 'duration', e.target.value)}
+                    placeholder="e.g. 2 Years"
+                    className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:border-[#0071e3]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-500 mb-1">Description</label>
+                  <input
+                    type="text"
+                    value={plan.description || ''}
+                    onChange={(e) => handlePlanChange(idx, 'description', e.target.value)}
+                    placeholder="Short description"
+                    className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:border-[#0071e3]"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Add Plan Row */}
+        <div className="p-4 bg-blue-50/50 border border-dashed border-blue-200 rounded-2xl space-y-3">
+          <span className="text-xs font-bold text-zinc-800 block">Add New Dropdown Plan:</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <input
+              type="text"
+              value={newPlan.name}
+              onChange={(e) => setNewPlan(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="Plan Name (e.g. AppleCare+ 1 Year)"
+              className="bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:border-[#0071e3]"
+            />
+            <input
+              type="number"
+              value={newPlan.price}
+              onChange={(e) => setNewPlan(prev => ({ ...prev, price: e.target.value }))}
+              placeholder="Price (e.g. 1999)"
+              className="bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:border-[#0071e3]"
+            />
+            <input
+              type="text"
+              value={newPlan.duration}
+              onChange={(e) => setNewPlan(prev => ({ ...prev, duration: e.target.value }))}
+              placeholder="Duration (e.g. 1 Year)"
+              className="bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:border-[#0071e3]"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleAddPlan}
+            className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer border-0"
+          >
+            <Plus className="w-4 h-4" /> Add Dropdown Plan
+          </button>
+        </div>
+      </div>
+
+      {/* 6. Live Storefront Card Preview Box */}
       <div className="bg-white border border-zinc-200 rounded-2xl sm:rounded-3xl shadow-sm p-6 sm:p-8 space-y-6 w-full">
         <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
           <div className="flex items-center gap-2">
@@ -452,7 +600,7 @@ export default function ProductAppleCareManager() {
         <div className="space-y-2">
           <label className="text-xs font-semibold text-zinc-500">Preview Category:</label>
           <div className="flex flex-wrap gap-2">
-            {['Mac', 'iPhone', 'iPad', 'Watch', 'AirPods'].map(cat => (
+            {['Mac', 'iPhone', 'iPad', 'Watch', 'AirPods', 'TV & Home'].map(cat => (
               <button
                 type="button"
                 key={cat}
@@ -475,39 +623,18 @@ export default function ProductAppleCareManager() {
             Widget is currently disabled. Toggle &quot;Widget Enabled&quot; above to view storefront preview.
           </div>
         ) : (
-          <div className="bg-white border border-zinc-200 rounded-3xl p-5 sm:p-6 shadow-xs text-left select-none relative max-w-lg mx-auto">
-            {productAppleCare.title && (
-              <div className="flex items-center gap-2 mb-1">
-                <svg className="w-5 h-5 text-zinc-900 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+          <div className="bg-white border border-[#D9D9DE] rounded-3xl my-2 shadow-xs transition-all duration-200 overflow-hidden max-w-lg mx-auto">
+            <div className="p-4 sm:p-5 flex items-center justify-between gap-4 select-none">
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <svg className="w-7 h-7 sm:w-8 sm:h-8 text-[#E30000] shrink-0" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.32c.67-.82 1.13-1.96.99-3.11-1 .04-2.19.67-2.9 1.49-.64.74-1.2 1.92-1.05 3.05 1.12.09 2.29-.61 2.96-1.43z" />
                 </svg>
-                <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 leading-tight tracking-tight">
+                <h3 className="text-xl sm:text-2xl font-bold text-[#000000] leading-none tracking-tight">
                   {productAppleCare.title}
                 </h3>
               </div>
-            )}
-
-            {(activePricing.monthly || activePricing.mrp) && (
-              <div className="mt-1.5 space-y-0.5">
-                {activePricing.monthly && <p className="text-sm sm:text-base font-bold text-zinc-900">{activePricing.monthly}</p>}
-                {activePricing.mrp && <p className="text-xs sm:text-sm text-zinc-600 font-medium">{activePricing.mrp}</p>}
-              </div>
-            )}
-
-            {productAppleCare.features?.length > 0 && (
-              <>
-                <hr className="my-4 border-zinc-200" />
-
-                <ul className="space-y-2.5 text-xs sm:text-sm text-zinc-800 font-medium">
-                  {productAppleCare.features.map((ft, i) => (
-                    <li key={i} className="flex items-start gap-2.5">
-                      <span className="text-zinc-900 font-bold">•</span>
-                      <span>{ft.replace('{category}', previewCategory)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+              <ChevronDown className="w-5 h-5 text-zinc-800 shrink-0" />
+            </div>
           </div>
         )}
       </div>
