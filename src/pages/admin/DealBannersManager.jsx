@@ -116,7 +116,8 @@ export default function DealBannersManager() {
       dealButtonText: 'Grab the Deal',
       dealButtonLink: '/shop',
       displayOrder: dealBanners.length + 1,
-      isActive: true
+      isActive: true,
+      isFullBanner: false
     };
 
     if (selectedProductId) {
@@ -142,7 +143,8 @@ export default function DealBannersManager() {
           dealButtonText: 'Grab the Deal',
           dealButtonLink: `/product/${prodId}`,
           displayOrder: dealBanners.length + 1,
-          isActive: true
+          isActive: true,
+          isFullBanner: false
         };
       }
     }
@@ -220,6 +222,7 @@ export default function DealBannersManager() {
       });
       if (res.data?.url) {
         handleUpdateField(index, 'dealImage', res.data.url);
+        handleUpdateField(index, 'isFullBanner', true);
       }
     } catch (err) {
       alert("Image upload failed: " + (err.response?.data?.message || err.message));
@@ -255,9 +258,10 @@ export default function DealBannersManager() {
     setSuccess(null);
 
     try {
-      // Re-assign display order numbers
+      // Re-assign display order numbers and ensure isFullBanner boolean
       const sanitized = dealBanners.map((item, idx) => ({
         ...item,
+        isFullBanner: Boolean(item.isFullBanner),
         mrp: Number(item.mrp) || 0,
         discount: Number(item.discount) || 0,
         dealPrice: Number(item.dealPrice) || 0,
@@ -447,6 +451,53 @@ export default function DealBannersManager() {
               <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Left Column: Form Fields */}
                 <div className="lg:col-span-8 space-y-4">
+                  {/* Banner Display Layout Mode (Full Box Banner vs Split Layout) */}
+                  <div className="p-4 bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-blue-50/80 border border-blue-200 rounded-2xl shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">🖼️</span>
+                          <span className="text-xs font-extrabold text-zinc-900 tracking-tight">Banner Display Size / Mode</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            banner.isFullBanner ? 'bg-blue-600 text-white' : 'bg-zinc-200 text-zinc-700'
+                          }`}>
+                            {banner.isFullBanner ? 'Full Box Size' : 'Split Layout'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-600 mt-1 leading-relaxed">
+                          {banner.isFullBanner
+                            ? '✅ बड़ा साइज़ (Full Box): आपकी इमेज पूरे 1400px बॉक्स को कवर करेगी (100% full width banner).'
+                            : '⚡ Split Layout: लेफ्ट साइड में टेक्स्ट/प्राइस और राइट साइड में छोटा प्रोडक्ट कटआउट दिखेगा.'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateField(index, 'isFullBanner', true)}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            banner.isFullBanner
+                              ? 'bg-[#0071e3] text-white shadow-sm ring-2 ring-[#0071e3]/30'
+                              : 'bg-white text-zinc-700 border border-zinc-200 hover:bg-zinc-50'
+                          }`}
+                        >
+                          <span>🔲</span> Full Box Banner (बड़ा साइज़)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateField(index, 'isFullBanner', false)}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            !banner.isFullBanner
+                              ? 'bg-[#0071e3] text-white shadow-sm ring-2 ring-[#0071e3]/30'
+                              : 'bg-white text-zinc-700 border border-zinc-200 hover:bg-zinc-50'
+                          }`}
+                        >
+                          <span>✂️</span> Split Layout (छोटा)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Internal Name */}
                     <div>
@@ -670,25 +721,36 @@ export default function DealBannersManager() {
                     />
                   </div>
 
-                  {/* Live Live Card Mock Preview */}
-                  <div className="p-3 bg-[#1d1d1f] text-white rounded-xl text-left border border-zinc-800 space-y-1">
-                    <div className="text-[9px] font-bold text-amber-400 uppercase tracking-widest">
-                      {banner.dealEyebrow || 'DEAL OF THE WEEK'}
+                  {/* Live Card Mock Preview */}
+                  {banner.isFullBanner ? (
+                    <div className="p-3 bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border border-blue-500/40 rounded-xl space-y-1.5 text-center">
+                      <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest flex items-center justify-center gap-1">
+                        <span>🖼️</span> Full Box Banner Mode (Active)
+                      </div>
+                      <p className="text-[11px] text-zinc-300">
+                        यह बैनर होमपेज पर <strong>पूरे बॉक्स जितने बड़े साइज़ (100% width)</strong> में शो होगा.
+                      </p>
                     </div>
-                    <div className="text-xs font-bold text-white truncate">
-                      {banner.dealTitle || 'MacBook Neo – Stock Clearance'}
-                    </div>
-                    <div className="flex items-baseline gap-2 pt-1">
-                      <span className="text-sm font-extrabold text-white">
-                        ₹{Number(banner.dealPrice || 72900).toLocaleString('en-IN')}
-                      </span>
-                      {Number(banner.mrp || 79900) > Number(banner.dealPrice || 72900) && (
-                        <span className="text-[10px] text-zinc-400 line-through">
-                          ₹{Number(banner.mrp || 79900).toLocaleString('en-IN')}
+                  ) : (
+                    <div className="p-3 bg-[#1d1d1f] text-white rounded-xl text-left border border-zinc-800 space-y-1">
+                      <div className="text-[9px] font-bold text-amber-400 uppercase tracking-widest">
+                        {banner.dealEyebrow || 'DEAL OF THE WEEK'}
+                      </div>
+                      <div className="text-xs font-bold text-white truncate">
+                        {banner.dealTitle || 'MacBook Neo – Stock Clearance'}
+                      </div>
+                      <div className="flex items-baseline gap-2 pt-1">
+                        <span className="text-sm font-extrabold text-white">
+                          ₹{Number(banner.dealPrice || 72900).toLocaleString('en-IN')}
                         </span>
-                      )}
+                        {Number(banner.mrp || 79900) > Number(banner.dealPrice || 72900) && (
+                          <span className="text-[10px] text-zinc-400 line-through">
+                            ₹{Number(banner.mrp || 79900).toLocaleString('en-IN')}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
