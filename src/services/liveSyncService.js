@@ -6,7 +6,7 @@
  */
 
 // Keys that MUST NEVER be invalidated by cache sync
-const PROTECTED_KEYS = new Set(['token', 'user', 'cartItems', 'wishlistItems', 'orders']);
+const PROTECTED_KEYS = new Set(['token', 'user', 'admin_token', 'admin_user', 'cartItems', 'wishlistItems', 'orders']);
 
 /**
  * Selectively removes cached frontend data from localStorage

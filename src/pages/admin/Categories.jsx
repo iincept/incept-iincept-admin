@@ -56,7 +56,7 @@ export default function Categories() {
     formData.append('image', file);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('admin_token');
       const response = await axiosClient.post('/upload/single', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',

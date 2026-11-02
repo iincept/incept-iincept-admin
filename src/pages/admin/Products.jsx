@@ -306,7 +306,7 @@ export default function Products() {
     formData.append('images', file);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('admin_token');
       const response = await axiosClient.post('/upload/multiple', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -340,7 +340,7 @@ export default function Products() {
     });
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('admin_token');
       const response = await axiosClient.post('/upload/multiple', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -372,7 +372,7 @@ export default function Products() {
     });
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('admin_token');
       const response = await axiosClient.post('/upload/multiple', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',

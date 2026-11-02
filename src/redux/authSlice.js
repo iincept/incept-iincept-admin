@@ -7,6 +7,9 @@ export const loginUser = createAsyncThunk(
   async ({ email, password }, thunkAPI) => {
     try {
       const data = await authApi.login(email, password);
+      if (!data || data.role !== 'admin') {
+        return thunkAPI.rejectWithValue('Access denied. Only administrators are allowed to enter.');
+      }
       return data;
     } catch (err) {
       const message = err.response?.data?.message || err.message || 'Login failed';
@@ -15,16 +18,28 @@ export const loginUser = createAsyncThunk(
   }
 );
 
-// Retrieve initial session from local storage
-const initialUser = localStorage.getItem('user') 
-  ? JSON.parse(localStorage.getItem('user')) 
-  : null;
-const initialToken = localStorage.getItem('token') || null;
+// Retrieve initial session from local storage using admin keys
+const initialUser = (() => {
+  try {
+    const stored = localStorage.getItem('admin_user');
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+})();
+
+const initialToken = (() => {
+  try {
+    return localStorage.getItem('admin_token') || null;
+  } catch {
+    return null;
+  }
+})();
 
 const initialState = {
   user: initialUser,
   token: initialToken,
-  isAuthenticated: !!initialToken,
+  isAuthenticated: !!initialToken && initialUser?.role === 'admin',
   loading: false,
   error: null
 };
@@ -39,15 +54,23 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.loading = false;
       state.error = null;
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      try {
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_user');
+      } catch (err) {
+        // Ignore storage errors
+      }
     },
     clearAuthError: (state) => {
       state.error = null;
     },
     updateUser: (state, action) => {
       state.user = { ...state.user, ...action.payload };
-      localStorage.setItem('user', JSON.stringify(state.user));
+      try {
+        localStorage.setItem('admin_user', JSON.stringify(state.user));
+      } catch (err) {
+        // Ignore storage errors
+      }
     }
   },
   extraReducers: (builder) => {
@@ -67,8 +90,12 @@ const authSlice = createSlice({
         state.token = action.payload.token;
         state.isAuthenticated = true;
         state.error = null;
-        localStorage.setItem('token', action.payload.token);
-        localStorage.setItem('user', JSON.stringify(state.user));
+        try {
+          localStorage.setItem('admin_token', action.payload.token);
+          localStorage.setItem('admin_user', JSON.stringify(state.user));
+        } catch (err) {
+          // Ignore storage errors
+        }
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -76,8 +103,12 @@ const authSlice = createSlice({
         state.user = null;
         state.token = null;
         state.isAuthenticated = false;
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        try {
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('admin_user');
+        } catch (err) {
+          // Ignore storage errors
+        }
       });
   }
 });
