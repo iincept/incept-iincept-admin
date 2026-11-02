@@ -63,10 +63,10 @@ export default function NavbarManager() {
         setNavItems([
           {
             name: 'New Arrivals',
-            link: '/shop?sort=newest',
+            link: '/accessories',
             isActive: true,
             dropdownItems: [
-              { label: 'Explore New Arrivals', path: '/shop?sort=newest', query: 'New Arrivals', image: '/iphone_category_v2.jpg', price: 'New Releases', isActive: true },
+              { label: 'Explore New Arrivals', path: '/accessories', query: 'New Arrivals', image: '/iphone_category_v2.jpg', price: 'New Releases', isActive: true },
               { label: 'iPhone 17 Series', path: '/iphone', query: 'iPhone 17', image: '/iphone17p_orange.jpg', price: 'From ₹79,900', isActive: true },
               { label: 'MacBook M4 Series', path: '/macbook', query: 'MacBook Pro', image: '/mac_nav/macbook_pro.png', price: 'From ₹1,69,900', isActive: true },
               { label: 'Apple Watch Series 10', path: '/watch', query: 'Series 10', image: '/watch_category_uploaded.png', price: 'From ₹46,900', isActive: true },
@@ -191,10 +191,10 @@ export default function NavbarManager() {
       ...prev,
       {
         name: 'New Category',
-        link: '/shop',
+        link: '/accessories',
         isActive: true,
         dropdownItems: [
-          { label: 'Explore Category', path: '/shop', query: 'Shop', image: '', price: '', isActive: true }
+          { label: 'Explore Category', path: '/accessories', query: 'Accessories', image: '', price: '', isActive: true }
         ]
       }
     ]);
@@ -245,7 +245,7 @@ export default function NavbarManager() {
       const parent = { ...updated[parentIdx] };
       parent.dropdownItems = [
         ...(parent.dropdownItems || []),
-        { label: 'New Dropdown Item', path: parent.link || '/shop', query: parent.name || '', image: '', price: '', isActive: true }
+        { label: 'New Dropdown Item', path: parent.link || '/accessories', query: parent.name || '', image: '', price: '', isActive: true }
       ];
       updated[parentIdx] = parent;
       return updated;

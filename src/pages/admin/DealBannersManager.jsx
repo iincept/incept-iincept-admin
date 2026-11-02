@@ -110,11 +110,12 @@ export default function DealBannersManager() {
       dealDesc: 'Limited time offer on genuine Apple devices. Order today to claim free shipping.',
       productId: '',
       dealImage: '/mac_deal_fan.png',
+      mobileDealImage: '',
       mrp: 79900,
       discount: 10,
       dealPrice: 71910,
       dealButtonText: 'Grab the Deal',
-      dealButtonLink: '/shop',
+      dealButtonLink: '',
       displayOrder: dealBanners.length + 1,
       isActive: true,
       isFullBanner: false
@@ -137,6 +138,7 @@ export default function DealBannersManager() {
           dealDesc: selectedProd.subtitle || selectedProd.description || 'Amazing deal at an unbeatable price.',
           productId: prodId,
           dealImage: prodImg,
+          mobileDealImage: '',
           mrp: prodMrp,
           discount: Math.max(0, calcDiscount),
           dealPrice: prodPrice,
@@ -209,10 +211,10 @@ export default function DealBannersManager() {
     });
   };
 
-  // Image Upload Handler
-  const handleImageUpload = async (index, file) => {
+  // Image Upload Handler (Supports both Desktop and Mobile banner images)
+  const handleImageUpload = async (index, file, field = 'dealImage') => {
     if (!file) return;
-    setUploadingIndex(index);
+    setUploadingIndex(`${index}-${field}`);
     const formData = new FormData();
     formData.append('image', file);
 
@@ -221,7 +223,7 @@ export default function DealBannersManager() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       if (res.data?.url) {
-        handleUpdateField(index, 'dealImage', res.data.url);
+        handleUpdateField(index, field, res.data.url);
         handleUpdateField(index, 'isFullBanner', true);
       }
     } catch (err) {
@@ -262,6 +264,8 @@ export default function DealBannersManager() {
       const sanitized = dealBanners.map((item, idx) => ({
         ...item,
         isFullBanner: Boolean(item.isFullBanner),
+        dealImage: item.dealImage || '',
+        mobileDealImage: item.mobileDealImage || '',
         mrp: Number(item.mrp) || 0,
         discount: Number(item.discount) || 0,
         dealPrice: Number(item.dealPrice) || 0,
@@ -669,86 +673,144 @@ export default function DealBannersManager() {
                   </div>
                 </div>
 
-                {/* Right Column: Image & Card Preview */}
-                <div className="lg:col-span-4 flex flex-col space-y-4">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500">
-                    Product Image & Visual
-                  </label>
-
-                  {/* Image Preview Box */}
-                  <div className="relative aspect-4/3 w-full bg-[#1c1c1e] rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center p-4 group">
-                    <img
-                      src={banner.dealImage || '/mac_deal_fan.png'}
-                      alt={banner.dealTitle || 'Deal preview'}
-                      className="max-h-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
-                      onError={(e) => {
-                        e.currentTarget.src = '/mac_deal_fan.png';
-                      }}
-                    />
-
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-3">
-                      <label className="px-3 py-1.5 bg-white text-zinc-900 text-xs font-bold rounded-lg cursor-pointer hover:bg-zinc-100 transition-all flex items-center gap-1.5">
-                        <Upload className="h-3.5 w-3.5" />
-                        Upload
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleImageUpload(index, e.target.files[0])}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-
-                    {uploadingIndex === index && (
-                      <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-white text-xs font-bold gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Uploading...
-                      </div>
-                    )}
+                {/* Right Column: Desktop & Mobile Images */}
+                <div className="lg:col-span-4 flex flex-col space-y-5">
+                  <div className="border-b border-zinc-200 pb-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700">
+                      Banner Images (Desktop & Mobile)
+                    </h3>
+                    <p className="text-[11px] text-zinc-500">
+                      Upload or enter URLs for both desktop view (width 962px) and mobile view (≤650px).
+                    </p>
                   </div>
 
-                  {/* Image URL Input */}
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
-                      Image URL
-                    </label>
-                    <input
-                      type="text"
-                      value={banner.dealImage || ''}
-                      onChange={(e) => handleUpdateField(index, 'dealImage', e.target.value)}
-                      placeholder="/mac_deal_fan.png or https://..."
-                      className="w-full text-[11px] font-mono border border-zinc-200 rounded-lg px-3 py-2 bg-zinc-50 focus:bg-white focus:outline-none focus:border-[#0071e3]"
-                    />
-                  </div>
-
-                  {/* Live Card Mock Preview */}
-                  {banner.isFullBanner ? (
-                    <div className="p-3 bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border border-blue-500/40 rounded-xl space-y-1.5 text-center">
-                      <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest flex items-center justify-center gap-1">
-                        <span>🖼️</span> Full Box Banner Mode (Active)
-                      </div>
-                      <p className="text-[11px] text-zinc-300">
-                        यह बैनर होमपेज पर <strong>पूरे बॉक्स जितने बड़े साइज़ (100% width)</strong> में शो होगा.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-[#1d1d1f] text-white rounded-xl text-left border border-zinc-800 space-y-1">
-                      <div className="text-[9px] font-bold text-amber-400 uppercase tracking-widest">
-                        {banner.dealEyebrow || 'DEAL OF THE WEEK'}
-                      </div>
-                      <div className="text-xs font-bold text-white truncate">
-                        {banner.dealTitle || 'MacBook Neo – Stock Clearance'}
-                      </div>
-                      <div className="flex items-baseline gap-2 pt-1">
-                        <span className="text-sm font-extrabold text-white">
-                          ₹{Number(banner.dealPrice || 72900).toLocaleString('en-IN')}
+                  {/* 1. Desktop Banner Image */}
+                  <div className="space-y-2 bg-zinc-50 p-3.5 rounded-xl border border-zinc-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-zinc-700 flex items-center gap-1.5">
+                        <span>🖥️</span> Desktop Banner (Wide / 962px)
+                      </span>
+                      {banner.dealImage && (
+                        <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Active
                         </span>
-                        {Number(banner.mrp || 79900) > Number(banner.dealPrice || 72900) && (
-                          <span className="text-[10px] text-zinc-400 line-through">
-                            ₹{Number(banner.mrp || 79900).toLocaleString('en-IN')}
-                          </span>
-                        )}
+                      )}
+                    </div>
+
+                    <div className="relative aspect-[16/6] w-full bg-[#1c1c1e] rounded-lg overflow-hidden border border-zinc-700 flex items-center justify-center p-2 group">
+                      <img
+                        src={banner.dealImage || '/mac_deal_fan.png'}
+                        alt={banner.dealTitle || 'Desktop preview'}
+                        className="max-h-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          e.currentTarget.src = '/mac_deal_fan.png';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
+                        <label className="px-3 py-1.5 bg-white text-zinc-900 text-xs font-bold rounded-lg cursor-pointer hover:bg-zinc-100 transition-all flex items-center gap-1.5">
+                          <Upload className="h-3.5 w-3.5" />
+                          Upload Desktop Image
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageUpload(index, e.target.files[0], 'dealImage')}
+                            className="hidden"
+                          />
+                        </label>
                       </div>
+
+                      {uploadingIndex === `${index}-dealImage` && (
+                        <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-white text-xs font-bold gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading Desktop...
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
+                        Desktop Image URL
+                      </label>
+                      <input
+                        type="text"
+                        value={banner.dealImage || ''}
+                        onChange={(e) => handleUpdateField(index, 'dealImage', e.target.value)}
+                        placeholder="https://... or /uploads/..."
+                        className="w-full text-[11px] font-mono border border-zinc-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:border-[#0071e3]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 2. Mobile Banner Image */}
+                  <div className="space-y-2 bg-indigo-50/50 p-3.5 rounded-xl border border-indigo-200/80">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-indigo-950 flex items-center gap-1.5">
+                        <span>📱</span> Mobile Banner (≤650px / Square)
+                      </span>
+                      {banner.mobileDealImage ? (
+                        <span className="text-[10px] text-indigo-700 font-bold bg-indigo-100 px-2 py-0.5 rounded-full border border-indigo-300">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-full">
+                          Optional (Falls back to Desktop)
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="relative aspect-square w-full max-w-[200px] mx-auto bg-[#1c1c1e] rounded-lg overflow-hidden border border-indigo-300/80 flex items-center justify-center p-2 group">
+                      <img
+                        src={banner.mobileDealImage || banner.dealImage || '/mac_deal_fan.png'}
+                        alt={banner.dealTitle || 'Mobile preview'}
+                        className="max-h-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          e.currentTarget.src = '/mac_deal_fan.png';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
+                        <label className="px-3 py-1.5 bg-white text-zinc-900 text-xs font-bold rounded-lg cursor-pointer hover:bg-zinc-100 transition-all flex items-center gap-1.5">
+                          <Upload className="h-3.5 w-3.5" />
+                          Upload Mobile Image
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageUpload(index, e.target.files[0], 'mobileDealImage')}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+
+                      {uploadingIndex === `${index}-mobileDealImage` && (
+                        <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-white text-xs font-bold gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading Mobile...
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-900 mb-1">
+                        Mobile Image URL (≤650px View)
+                      </label>
+                      <input
+                        type="text"
+                        value={banner.mobileDealImage || ''}
+                        onChange={(e) => handleUpdateField(index, 'mobileDealImage', e.target.value)}
+                        placeholder="https://... or /uploads/..."
+                        className="w-full text-[11px] font-mono border border-indigo-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:border-[#0071e3]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Mode Info Badge */}
+                  {banner.isFullBanner && (
+                    <div className="p-3 bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border border-blue-500/40 rounded-xl space-y-1 text-center">
+                      <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest flex items-center justify-center gap-1">
+                        <span>🖼️</span> 962px Responsive Full Banner
+                      </div>
+                      <p className="text-[11px] text-zinc-300 leading-snug">
+                        डेस्कटॉप पर 962px चौड़ा बैनर दिखेगा और 650px से छोटे मोबाइल पर ऑटोमैटिक स्क्वायर मोबाइल बैनर शो होगा.
+                      </p>
                     </div>
                   )}
                 </div>

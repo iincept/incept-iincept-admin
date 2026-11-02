@@ -80,7 +80,7 @@ export default function NewArrivalsManager() {
       price: 'From ₹79,900',
       monthlyPrice: 'or ₹3,329/mo.*',
       image: '/iphone_nav/iphone_17_pro.png',
-      path: '/shop',
+      path: '/accessories',
       isActive: true
     };
 

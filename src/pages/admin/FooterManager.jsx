@@ -95,7 +95,7 @@ export default function FooterManager() {
         title: 'NEW SECTION',
         isActive: true,
         links: [
-          { label: 'New Link', url: '/shop', isActive: true }
+          { label: 'New Link', url: '/accessories', isActive: true }
         ]
       }
     ]);
@@ -149,7 +149,7 @@ export default function FooterManager() {
       const section = { ...updated[sectionIndex] };
       section.links = [
         ...(section.links || []),
-        { label: 'New Link', url: '/shop', isActive: true }
+        { label: 'New Link', url: '/accessories', isActive: true }
       ];
       updated[sectionIndex] = section;
       return updated;

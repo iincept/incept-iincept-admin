@@ -54,7 +54,7 @@ export default function AppleCategories() {
           { name: 'TV & Home', actionText: 'Shop all models →', link: '/tv-home', image: '/tvhome_category_uploaded.png', cardTheme: 'light', isActive: true },
           { name: 'Accessories', actionText: 'Shop all models →', link: '/accessories', image: '/accessories_category_uploaded.png', cardTheme: 'dark', isActive: true },
           { name: 'AppleCare+', actionText: 'Explore coverage →', link: '/applecare', image: '/applecare_official_hero.png', cardTheme: 'dark', isActive: true },
-          { name: 'New Arrivals', actionText: 'Explore latest releases →', link: '/shop?sort=newest', image: '', cardTheme: 'dark', isActive: true },
+          { name: 'New Arrivals', actionText: 'Explore latest releases →', link: '/accessories', image: '', cardTheme: 'dark', isActive: true },
         ]);
       }
     } catch (err) {
@@ -70,7 +70,7 @@ export default function AppleCategories() {
       {
         name: 'New Category',
         actionText: 'Shop all models →',
-        link: '/shop',
+        link: '/accessories',
         image: '',
         cardTheme: 'dark',
         isActive: true
@@ -334,7 +334,7 @@ export default function AppleCategories() {
                     <label className="block text-[10px] font-bold text-zinc-600 uppercase tracking-wider">Target Page Link (URL)</label>
                     <input
                       type="text"
-                      value={card.link || '/shop'}
+                      value={card.link || '/accessories'}
                       onChange={(e) => handleAppleCardChange(index, 'link', e.target.value)}
                       placeholder="e.g. /iphone, /macbook, /ipad"
                       className="w-full px-3.5 py-2 bg-white rounded-xl border border-zinc-200 text-xs font-mono focus:border-[#0071e3] outline-none"

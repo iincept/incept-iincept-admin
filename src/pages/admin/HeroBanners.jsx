@@ -173,7 +173,7 @@ export default function HeroBanners() {
           titleNormal: "Title",
           subtitle: "Add your banner description or promotional offer text here.",
           buttonText: "Explore Now →",
-          buttonLink: "/shop",
+          buttonLink: "/accessories",
           secondaryButtonText: "Find Nearest Store",
           secondaryButtonLink: "#store-locator",
           image: "",
@@ -1168,7 +1168,7 @@ export default function HeroBanners() {
                         type="text"
                         value={slide.buttonLink || ''}
                         onChange={(e) => handleSlideChange(index, 'buttonLink', e.target.value)}
-                        placeholder="e.g. /shop or #categories"
+                        placeholder="e.g. /accessories or /tv-home or #categories"
                         className="w-full px-3 py-2 bg-white rounded-lg border border-zinc-200 text-xs focus:border-[#0071e3] outline-none font-mono"
                       />
                     </div>
