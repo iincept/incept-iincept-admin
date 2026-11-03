@@ -18,17 +18,18 @@ export default function AdminLogin() {
 
   useEffect(() => {
     if (isAuthenticated && user?.role === 'admin') {
-      navigate('/dashboard/home');
+      navigate('/admin/dashboard');
     }
   }, [isAuthenticated, user, navigate]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    dispatch(loginUser({ email, password }))
+    const cleanIdent = email.trim();
+    dispatch(loginUser({ email: cleanIdent, username: cleanIdent, password }))
       .unwrap()
       .then((data) => {
         if (data.role === 'admin') {
-          navigate('/dashboard/home');
+          navigate('/admin/dashboard');
         } else {
           alert('Access denied. Only administrators are allowed to enter.');
           dispatch(logout());
@@ -65,11 +66,11 @@ export default function AdminLogin() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest mb-1.5">Email Address</label>
+            <label className="block text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest mb-1.5">Email Address or Username</label>
             <input
-              type="email"
+              type="text"
               required
-              placeholder="admin@iincept.com"
+              placeholder="admin@iincept.com or username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#0071e3] outline-none text-xs text-white transition-all"

@@ -1,7 +1,12 @@
 import axiosClient from './axiosClient';
 
 export const login = async (email, password) => {
-  const response = await axiosClient.post('/auth/login', { email, password });
+  const ident = (email || '').trim();
+  const response = await axiosClient.post('/auth/login', { 
+    email: ident, 
+    username: ident, 
+    password 
+  });
   return response.data;
 };
 
