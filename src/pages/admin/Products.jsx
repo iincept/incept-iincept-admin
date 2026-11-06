@@ -36,7 +36,13 @@ import {
   Headphones,
   Plug,
   Tv,
-  FileText
+  FileText,
+  Sparkles,
+  Wand2,
+  RefreshCw,
+  Palette,
+  CheckCircle2,
+  Undo2
 } from 'lucide-react';
 import { getProducts, createProduct, updateProduct, deleteProduct, exportProductsExcel, previewImportProductsExcel, importProductsExcel } from '../../services/productApi';
 import { getCategories } from '../../services/categoryApi';
@@ -101,6 +107,21 @@ export default function Products() {
   const [loadingExcelPreview, setLoadingExcelPreview] = useState(false);
   const [excelPreviewData, setExcelPreviewData] = useState(null);
   const [importingExcel, setImportingExcel] = useState(false);
+
+  // Auto Color Detection State for Add/Edit Form
+  const [isDetectingColors, setIsDetectingColors] = useState(false);
+  const [colorDetectionMeta, setColorDetectionMeta] = useState(null);
+
+  // Bulk Auto Color Detection Modal State
+  const [showBulkColorModal, setShowBulkColorModal] = useState(false);
+  const [bulkScanProducts, setBulkScanProducts] = useState([]);
+  const [loadingBulkScan, setLoadingBulkScan] = useState(false);
+  const [bulkFilterTab, setBulkFilterTab] = useState('missing'); // 'missing', 'ready', 'all', 'verified'
+  const [bulkSearchQuery, setBulkSearchQuery] = useState('');
+  const [selectedBulkIds, setSelectedBulkIds] = useState([]);
+  const [applyingBulk, setApplyingBulk] = useState(false);
+  const [lastBulkSnapshotId, setLastBulkSnapshotId] = useState(null);
+  const [rollingBackBulk, setRollingBackBulk] = useState(false);
 
   const CATEGORY_EXCEL_ITEMS = [
     { key: 'mac', name: 'Mac', subtitle: 'MacBook Air, Pro, iMac, Mac Studio, Mac mini', icon: Laptop, color: 'bg-blue-600', textColor: 'text-blue-600', bgSoft: 'bg-blue-50 border-blue-200' },
@@ -315,12 +336,18 @@ export default function Products() {
       });
       const uploadedUrl = response.data[0]?.url;
       if (uploadedUrl) {
-        setProductForm(prev => ({
-          ...prev,
-          displayImage: uploadedUrl,
-          images: prev.images.includes(uploadedUrl) ? prev.images : [uploadedUrl, ...prev.images]
-        }));
+        const combinedImages = prevImages => prevImages.includes(uploadedUrl) ? prevImages : [uploadedUrl, ...prevImages];
+        setProductForm(prev => {
+          const nextImages = combinedImages(prev.images);
+          return {
+            ...prev,
+            displayImage: uploadedUrl,
+            images: nextImages
+          };
+        });
         showSuccessMessage('Display Image uploaded successfully!');
+        // Automatically detect colors using title and uploaded image
+        autoDetectProductColors(productForm.title, [uploadedUrl, ...productForm.images]);
       }
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Display Image upload failed');
@@ -348,15 +375,204 @@ export default function Products() {
         }
       });
       const uploadedUrls = response.data.map(item => item.url);
+      const combinedImages = [...productForm.images, ...uploadedUrls];
       setProductForm(prev => ({
         ...prev,
-        images: [...prev.images, ...uploadedUrls]
+        images: combinedImages
       }));
       showSuccessMessage('Images uploaded successfully!');
+      // Automatically detect and associate colors from title and uploaded images
+      autoDetectProductColors(productForm.title, combinedImages);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Image upload failed');
     } finally {
       setUploadingImage(false);
+    }
+  };
+
+  // Automatic Color Detection from Product Name + Uploaded Images
+  const autoDetectProductColors = async (titleOverride = null, imagesOverride = null) => {
+    const targetImages = imagesOverride || productForm.images || [];
+    if (!targetImages || targetImages.length === 0) {
+      return;
+    }
+    const targetTitle = titleOverride !== null ? titleOverride : (productForm.title || '');
+    setIsDetectingColors(true);
+
+    try {
+      const token = localStorage.getItem('admin_token');
+      const response = await axiosClient.post(
+        '/products/detect-colors',
+        { title: targetTitle, images: targetImages },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data && response.data.detectedColors && response.data.detectedColors.length > 0) {
+        const { detectedColors, colorImages, confidence, reviewNeeded } = response.data;
+        setColorDetectionMeta({
+          confidence,
+          reviewNeeded,
+          count: detectedColors.length,
+          timestamp: Date.now()
+        });
+
+        setProductForm(prev => {
+          const newColors = detectedColors.map(c => ({
+            name: c.name,
+            value: c.colorHex,
+            colorHex: c.colorHex,
+            image: c.image,
+            images: c.images || [c.image].filter(Boolean),
+            confidence: c.confidence
+          }));
+
+          const mergedColorImages = {
+            ...(prev.colorImages || {}),
+            ...colorImages
+          };
+
+          // Automatically sync or create variants matching the detected colors
+          let finalVariants = [...(prev.variants || [])];
+          const basePrice = Number(prev.price || 0);
+          const baseStock = Number(prev.stock || 10);
+
+          if (finalVariants.length === 0 || (finalVariants.length === 1 && !finalVariants[0].color)) {
+            finalVariants = detectedColors.map((dc, idx) => ({
+              id: `var-${Date.now()}-${idx}`,
+              color: dc.name,
+              colorHex: dc.colorHex,
+              price: basePrice,
+              discountPrice: '',
+              discountPercent: 0,
+              discount: 0,
+              discountInput: '',
+              stock: baseStock,
+              sku: `PRO-${Date.now().toString().slice(-4)}-${idx + 1}`,
+              partNumber: '',
+              modelNumber: '',
+              size: prev.sizes?.[0] || 'Standard',
+              storage: prev.storage?.[0] || '',
+              ram: prev.ram?.[0] || '',
+              displayTitle: dc.name,
+              images: dc.images && dc.images.length > 0 ? dc.images : [dc.image].filter(Boolean)
+            }));
+          } else {
+            finalVariants = finalVariants.map(v => {
+              if (!v.color && detectedColors.length === 1) {
+                return {
+                  ...v,
+                  color: detectedColors[0].name,
+                  colorHex: detectedColors[0].colorHex,
+                  images: v.images && v.images.length > 0 ? v.images : (detectedColors[0].images || [detectedColors[0].image].filter(Boolean))
+                };
+              }
+              const matchC = detectedColors.find(c => c.name.toLowerCase() === (v.color || '').toLowerCase());
+              if (matchC) {
+                return {
+                  ...v,
+                  colorHex: matchC.colorHex,
+                  images: v.images && v.images.length > 0 ? v.images : (matchC.images || [matchC.image].filter(Boolean))
+                };
+              }
+              return v;
+            });
+          }
+
+          return {
+            ...prev,
+            colors: newColors,
+            colorImages: mergedColorImages,
+            variants: finalVariants,
+            displayImage: prev.displayImage || detectedColors[0]?.image || targetImages[0] || ''
+          };
+        });
+
+        showSuccessMessage(`Auto-detected ${detectedColors.length} color(s): ${detectedColors.map(c => c.name).join(', ')}`);
+      }
+    } catch (err) {
+      console.warn("Auto color detection error:", err.message);
+    } finally {
+      setIsDetectingColors(false);
+    }
+  };
+
+  // Bulk Color Scan & Sync Methods
+  const fetchBulkColorScan = async () => {
+    setLoadingBulkScan(true);
+    try {
+      const token = localStorage.getItem('admin_token');
+      const response = await axiosClient.get('/products/bulk-color-scan', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data && response.data.products) {
+        setBulkScanProducts(response.data.products);
+        // Automatically select products that have missing colors and detected colors ready to populate
+        const autoSelectable = response.data.products
+          .filter(p => p.detectedColors && p.detectedColors.length > 0 && p.status !== 'verified_match')
+          .map(p => p._id);
+        setSelectedBulkIds(autoSelectable);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to scan catalog for colors');
+    } finally {
+      setLoadingBulkScan(false);
+    }
+  };
+
+  const handleApplyBulkColors = async () => {
+    const targets = bulkScanProducts.filter(p => selectedBulkIds.includes(p._id) && p.detectedColors?.length > 0);
+    if (targets.length === 0) {
+      setError('Please select at least one product with detected colors to apply.');
+      return;
+    }
+
+    setApplyingBulk(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('admin_token');
+      const updates = targets.map(p => ({
+        productId: p._id,
+        colors: p.detectedColors,
+        colorImages: p.colorImages
+      }));
+
+      const response = await axiosClient.post('/products/bulk-color-apply', { updates }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data && response.data.snapshotId) {
+        setLastBulkSnapshotId(response.data.snapshotId);
+      }
+
+      showSuccessMessage(response.data.message || `Applied colors to ${targets.length} products!`);
+      await fetchBulkColorScan();
+      fetchProducts();
+      notifyAdminChange();
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to apply bulk colors');
+    } finally {
+      setApplyingBulk(false);
+    }
+  };
+
+  const handleRollbackBulk = async () => {
+    setRollingBackBulk(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('admin_token');
+      const response = await axiosClient.post('/products/bulk-color-rollback', {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setLastBulkSnapshotId(null);
+      showSuccessMessage(response.data.message || 'Bulk color update rolled back successfully!');
+      await fetchBulkColorScan();
+      fetchProducts();
+      notifyAdminChange();
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to rollback bulk update');
+    } finally {
+      setRollingBackBulk(false);
     }
   };
 
@@ -1229,6 +1445,17 @@ export default function Products() {
                 EXCEL SHEETS
               </button>
               <button
+                onClick={() => {
+                  setShowBulkColorModal(true);
+                  fetchBulkColorScan();
+                }}
+                className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-4 py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer border-0 shadow-sm hover:shadow-md"
+                title="Scan all products in MongoDB and automatically detect colors from images"
+              >
+                <Sparkles className="h-4 w-4 text-violet-200" />
+                AUTO-DETECT COLORS (BULK)
+              </button>
+              <button
                 onClick={() => setShowProductForm(true)}
                 className="flex items-center gap-2 bg-[#0071e3] hover:bg-[#0077ed] text-white px-5 py-3 rounded-2xl text-sm font-medium tracking-wide shadow-sm hover:shadow-md transition-all cursor-pointer border-0"
               >
@@ -2077,32 +2304,172 @@ export default function Products() {
                         </div>
                       )}
 
-                      {/* Colors Config Options */}
-                      <VariantTagInput
-                        label="Colors Config Options"
-                        placeholder="e.g. Space Grey, Black, Light Gold, Dark Bronze"
-                        tags={(productForm.colors || []).map(c => typeof c === 'object' ? c.name : c)}
-                        onChange={(tags) => {
-                          const removed = (productForm.colors || []).map(c => typeof c === 'object' ? c.name : c).filter(t => !tags.includes(t));
-                          let updatedVariants = [...(productForm.variants || [])];
-                          if (removed.length > 0) {
-                            updatedVariants = updatedVariants.map(v => {
-                              if (removed.includes(v.color)) {
-                                return { ...v, color: '' };
+                      {/* Automatic Product Color Detection Card */}
+                      <div className="bg-gradient-to-br from-violet-50/70 to-indigo-50/50 border border-violet-200 rounded-2xl p-4.5 space-y-3.5 text-left">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-violet-100">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-2 bg-violet-600 text-white rounded-xl shadow-xs">
+                              <Sparkles className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                                Available Product Colors
+                                {colorDetectionMeta && (
+                                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                                    colorDetectionMeta.confidence === 'high'
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                      : colorDetectionMeta.confidence === 'medium'
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                                  }`}>
+                                    {colorDetectionMeta.confidence === 'high' ? 'AI: High Confidence' : colorDetectionMeta.confidence === 'medium' ? 'AI: Medium Confidence' : 'AI: Review Needed'}
+                                  </span>
+                                )}
+                              </h4>
+                              <p className="text-[11px] text-zinc-500 mt-0.5">
+                                Automatically detected from product name and uploaded product images. No manual color entry required.
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => autoDetectProductColors()}
+                            disabled={isDetectingColors || (!productForm.images?.length && !productForm.displayImage)}
+                            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer border-0 shadow-xs disabled:opacity-50 self-start sm:self-center"
+                            title="Re-run color detection on current product name and images"
+                          >
+                            {isDetectingColors ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <span>Analyzing Images...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Wand2 className="h-3.5 w-3.5" />
+                                <span>Re-Detect Colors</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Detected Color Swatches Grid */}
+                        {(productForm.colors && productForm.colors.length > 0) ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                            {productForm.colors.map((c, cIdx) => {
+                              const cName = typeof c === 'object' ? (c.name || 'Color') : c;
+                              const cHex = typeof c === 'object' ? (c.colorHex || c.value || resolveColorHex(cName)) : resolveColorHex(cName);
+                              const cImg = typeof c === 'object' ? (c.image || (c.images && c.images[0]) || '') : (productForm.colorImages?.[cName] || '');
+                              const imgCount = typeof c === 'object' && Array.isArray(c.images) ? c.images.length : (cImg ? 1 : 0);
+
+                              return (
+                                <div key={cIdx} className="bg-white border border-violet-150 rounded-xl p-2.5 shadow-xs flex items-center justify-between gap-2 hover:border-violet-300 transition-all">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="relative shrink-0">
+                                      <div
+                                        className="w-7 h-7 rounded-full border border-zinc-250 shadow-inner"
+                                        style={{ backgroundColor: cHex }}
+                                      />
+                                      <input
+                                        type="color"
+                                        value={isValidHex(cHex) ? normalizeHex(cHex) : '#808080'}
+                                        onChange={(e) => {
+                                          const newHex = e.target.value.toUpperCase();
+                                          setProductForm(prev => {
+                                            const updated = [...(prev.colors || [])];
+                                            updated[cIdx] = typeof updated[cIdx] === 'object'
+                                              ? { ...updated[cIdx], colorHex: newHex, value: newHex }
+                                              : { name: updated[cIdx], colorHex: newHex, value: newHex };
+                                            return { ...prev, colors: updated };
+                                          });
+                                        }}
+                                        className="opacity-0 absolute inset-0 cursor-pointer w-full h-full"
+                                        title="Click to tweak HEX value"
+                                      />
+                                    </div>
+
+                                    <div className="min-w-0">
+                                      <span className="font-bold text-xs text-zinc-900 truncate block">{cName}</span>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        <span className="font-mono text-[10px] text-zinc-500 font-semibold">{cHex}</span>
+                                        {imgCount > 0 && (
+                                          <span className="text-[9px] bg-zinc-100 text-zinc-600 px-1.5 py-0.2 rounded font-medium">
+                                            {imgCount} img{imgCount > 1 ? 's' : ''}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {cImg ? (
+                                      <div className="w-8 h-8 rounded-lg border border-zinc-200 bg-white p-0.5 overflow-hidden shrink-0" title={`Mapped to: ${cImg}`}>
+                                        <img src={cImg} alt={cName} className="w-full h-full object-contain" />
+                                      </div>
+                                    ) : (
+                                      <div className="w-8 h-8 rounded-lg border border-dashed border-zinc-200 flex items-center justify-center text-[8px] text-zinc-400">
+                                        No img
+                                      </div>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setProductForm(prev => ({
+                                          ...prev,
+                                          colors: prev.colors.filter((_, idx) => idx !== cIdx),
+                                          variants: prev.variants.map(v => v.color === cName ? { ...v, color: '' } : v)
+                                        }));
+                                      }}
+                                      className="p-1 hover:bg-rose-50 text-zinc-400 hover:text-rose-600 rounded-md transition-colors cursor-pointer border-0 bg-transparent"
+                                      title="Remove color"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="bg-white/70 border border-dashed border-violet-200 rounded-xl p-4 text-center">
+                            <Palette className="h-5 w-5 text-violet-400 mx-auto mb-1.5" />
+                            <p className="text-xs font-semibold text-zinc-700">No colors detected yet</p>
+                            <p className="text-[11px] text-zinc-500 mt-0.5">
+                              Upload product images above to automatically detect colors, hex values, and variants.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Optional Manual Tag Input (Foldable) */}
+                        <div className="pt-2 border-t border-violet-100">
+                          <VariantTagInput
+                            label="Manual Color Override (Optional)"
+                            placeholder="Type to manually add custom colors if needed..."
+                            tags={(productForm.colors || []).map(c => typeof c === 'object' ? c.name : c)}
+                            onChange={(tags) => {
+                              const removed = (productForm.colors || []).map(c => typeof c === 'object' ? c.name : c).filter(t => !tags.includes(t));
+                              let updatedVariants = [...(productForm.variants || [])];
+                              if (removed.length > 0) {
+                                updatedVariants = updatedVariants.map(v => {
+                                  if (removed.includes(v.color)) {
+                                    return { ...v, color: '' };
+                                  }
+                                  return v;
+                                });
                               }
-                              return v;
-                            });
-                          }
-                          setProductForm({
-                            ...productForm,
-                            colors: tags.map(t => {
-                              const existing = (productForm.colors || []).find(c => (c?.name || c) === t);
-                              return existing || { name: t, value: t, images: [] };
-                            }),
-                            variants: updatedVariants
-                          });
-                        }}
-                      />
+                              setProductForm({
+                                ...productForm,
+                                colors: tags.map(t => {
+                                  const existing = (productForm.colors || []).find(c => (c?.name || c) === t);
+                                  return existing || { name: t, value: resolveColorHex(t), colorHex: resolveColorHex(t), images: [] };
+                                }),
+                                variants: updatedVariants
+                              });
+                            }}
+                          />
+                        </div>
+                      </div>
 
                       <div className="flex flex-wrap gap-2 mt-1.5">
                         <button
@@ -3213,7 +3580,336 @@ export default function Products() {
           </div>
         </div>
       )}
+
+      {/* Centralized Bulk Color Detection & Auto-Sync Modal */}
+      {showBulkColorModal && (
+        <div className="fixed inset-0 bg-black/65 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+          <div className="w-full max-w-5xl bg-zinc-950 text-white border border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 relative overflow-hidden animate-in zoom-in-95 duration-250 text-left max-h-[92vh] flex flex-col">
+            
+            {/* Header */}
+            <header className="flex justify-between items-start border-b border-zinc-800 pb-4 shrink-0">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2.5 bg-gradient-to-br from-violet-600 to-indigo-600 text-white rounded-xl shadow-md">
+                    <Sparkles className="h-5 w-5 text-violet-200" />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-white text-lg sm:text-xl font-sans flex items-center gap-2">
+                      Bulk Automatic Color Detection
+                      <span className="text-[11px] font-semibold bg-violet-500/20 text-violet-300 px-2.5 py-0.5 rounded-full border border-violet-500/30">
+                        Name + Image AI Analysis
+                      </span>
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Scans existing products in MongoDB, extracts dominant foreground colors from images, and assigns swatches safely without altering prices or stock.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowBulkColorModal(false)}
+                className="p-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors border-0 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+
+            {/* Metrics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 shrink-0">
+              <div className="p-3 bg-zinc-900/80 rounded-2xl border border-zinc-800">
+                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">Total Catalog</span>
+                <span className="text-lg font-black text-white">{bulkScanProducts.length}</span>
+              </div>
+              <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20">
+                <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider block">Missing Colors</span>
+                <span className="text-lg font-black text-amber-300">
+                  {bulkScanProducts.filter(p => !p.currentColors || p.currentColors.length === 0).length}
+                </span>
+              </div>
+              <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
+                <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider block">Ready to Populate</span>
+                <span className="text-lg font-black text-emerald-300">
+                  {bulkScanProducts.filter(p => p.detectedColors?.length > 0 && (!p.currentColors || p.currentColors.length === 0)).length}
+                </span>
+              </div>
+              <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20">
+                <span className="text-[10px] font-extrabold text-blue-400 uppercase tracking-wider block">Verified Matches</span>
+                <span className="text-lg font-black text-blue-300">
+                  {bulkScanProducts.filter(p => p.status === 'verified_match').length}
+                </span>
+              </div>
+            </div>
+
+            {/* Filter Tabs & Search Bar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
+              <div className="flex items-center gap-1.5 p-1 bg-zinc-900 rounded-xl border border-zinc-800 overflow-x-auto text-xs">
+                {[
+                  { key: 'missing', label: 'Missing Colors', count: bulkScanProducts.filter(p => !p.currentColors || p.currentColors.length === 0).length },
+                  { key: 'ready', label: 'Ready to Apply', count: bulkScanProducts.filter(p => p.detectedColors?.length > 0).length },
+                  { key: 'all', label: 'All Products', count: bulkScanProducts.length },
+                  { key: 'verified', label: 'Verified', count: bulkScanProducts.filter(p => p.status === 'verified_match').length },
+                ].map(tab => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setBulkFilterTab(tab.key)}
+                    className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      bulkFilterTab === tab.key
+                        ? 'bg-violet-600 text-white shadow-xs'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                    }`}
+                  >
+                    {tab.label} ({tab.count})
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative min-w-[240px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder="Filter scan by title..."
+                  value={bulkSearchQuery}
+                  onChange={(e) => setBulkSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white outline-none focus:border-violet-500 placeholder-zinc-500"
+                />
+              </div>
+            </div>
+
+            {/* Table Area */}
+            <div className="flex-1 overflow-y-auto border border-zinc-800 rounded-2xl bg-zinc-900/50">
+              {loadingBulkScan ? (
+                <div className="p-16 flex flex-col items-center justify-center text-zinc-400">
+                  <Loader2 className="h-8 w-8 animate-spin text-violet-500 mb-3" />
+                  <span className="text-sm font-semibold">Scanning catalog products and analyzing images with AI...</span>
+                </div>
+              ) : bulkScanProducts.length === 0 ? (
+                <div className="p-12 text-center text-zinc-500 text-sm">
+                  No products found. Click "Refresh Scan" to analyze products.
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-zinc-900/90 sticky top-0 border-b border-zinc-800 text-[10px] text-zinc-400 font-extrabold uppercase tracking-wider z-10">
+                    <tr>
+                      <th className="p-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={
+                            bulkScanProducts.length > 0 &&
+                            selectedBulkIds.length === bulkScanProducts.filter(p => p.detectedColors?.length > 0).length
+                          }
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              const withDetected = bulkScanProducts
+                                .filter(p => p.detectedColors?.length > 0)
+                                .map(p => p._id);
+                              setSelectedBulkIds(withDetected);
+                            } else {
+                              setSelectedBulkIds([]);
+                            }
+                          }}
+                          className="rounded border-zinc-700 cursor-pointer"
+                        />
+                      </th>
+                      <th className="p-3">Product</th>
+                      <th className="p-3">Current Colors</th>
+                      <th className="p-3">Auto-Detected Colors</th>
+                      <th className="p-3">Confidence</th>
+                      <th className="p-3 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60">
+                    {bulkScanProducts
+                      .filter(p => {
+                        if (bulkFilterTab === 'missing') return !p.currentColors || p.currentColors.length === 0;
+                        if (bulkFilterTab === 'ready') return p.detectedColors && p.detectedColors.length > 0;
+                        if (bulkFilterTab === 'verified') return p.status === 'verified_match';
+                        return true;
+                      })
+                      .filter(p => !bulkSearchQuery || (p.title || '').toLowerCase().includes(bulkSearchQuery.toLowerCase()))
+                      .map((prod) => {
+                        const isSelected = selectedBulkIds.includes(prod._id);
+                        const hasDetected = prod.detectedColors && prod.detectedColors.length > 0;
+
+                        return (
+                          <tr key={prod._id} className="hover:bg-zinc-800/40 transition-colors">
+                            <td className="p-3 text-center">
+                              <input
+                                type="checkbox"
+                                disabled={!hasDetected}
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedBulkIds(prev => [...prev, prod._id]);
+                                  } else {
+                                    setSelectedBulkIds(prev => prev.filter(id => id !== prod._id));
+                                  }
+                                }}
+                                className="rounded border-zinc-700 cursor-pointer disabled:opacity-30"
+                              />
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-white p-1 border border-zinc-700 shrink-0 flex items-center justify-center overflow-hidden">
+                                  <img src={prod.sampleImage || '/placeholder.png'} alt="" className="w-full h-full object-contain" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-bold text-white text-xs truncate max-w-xs">{prod.title}</p>
+                                  <p className="text-[10px] text-zinc-400 mt-0.5">
+                                    {prod.category} • {prod.imagesCount} image{prod.imagesCount > 1 ? 's' : ''}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              {prod.currentColors && prod.currentColors.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {prod.currentColors.map((c, i) => {
+                                    const cName = typeof c === 'object' ? c.name : c;
+                                    const cHex = typeof c === 'object' ? (c.colorHex || c.value) : resolveColorHex(cName);
+                                    return (
+                                      <span key={i} className="inline-flex items-center gap-1 bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-md text-[10px] font-medium border border-zinc-700">
+                                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: cHex }} />
+                                        {cName}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-zinc-500 italic">None</span>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              {hasDetected ? (
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {prod.detectedColors.map((dc, i) => (
+                                    <span key={i} className="inline-flex items-center gap-1.5 bg-violet-950/80 text-violet-200 px-2 py-1 rounded-lg text-[10px] font-bold border border-violet-800/80 shadow-2xs">
+                                      <span className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: dc.colorHex }} />
+                                      <span>{dc.name}</span>
+                                      <span className="text-[9px] font-mono text-violet-300 font-normal">{dc.colorHex}</span>
+                                      {dc.image && (
+                                        <div className="w-3.5 h-3.5 rounded bg-white overflow-hidden p-0.2 shrink-0">
+                                          <img src={dc.image} alt="" className="w-full h-full object-contain" />
+                                        </div>
+                                      )}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-zinc-500 italic">No clear colors detected</span>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              {hasDetected ? (
+                                <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                  prod.confidence === 'high'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                    : prod.confidence === 'medium'
+                                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                }`}>
+                                  {prod.confidence.toUpperCase()}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-zinc-600">—</span>
+                              )}
+                            </td>
+                            <td className="p-3 text-right">
+                              <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                prod.status === 'ready_to_populate'
+                                  ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-600/40'
+                                  : prod.status === 'verified_match'
+                                  ? 'bg-zinc-800 text-zinc-400'
+                                  : prod.status === 'partial_or_new_colors'
+                                  ? 'bg-violet-600/20 text-violet-300 border border-violet-600/40'
+                                  : 'bg-zinc-800/60 text-zinc-500'
+                              }`}>
+                                {prod.status.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Footer with Actions */}
+            <footer className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-zinc-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const withDetected = bulkScanProducts
+                      .filter(p => p.detectedColors?.length > 0 && (!p.currentColors || p.currentColors.length === 0))
+                      .map(p => p._id);
+                    setSelectedBulkIds(withDetected);
+                  }}
+                  className="text-xs font-bold text-violet-400 hover:text-violet-300 bg-violet-950/60 border border-violet-800/80 px-3 py-1.5 rounded-xl cursor-pointer"
+                >
+                  Select All Missing ({bulkScanProducts.filter(p => p.detectedColors?.length > 0 && (!p.currentColors || p.currentColors.length === 0)).length})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={fetchBulkColorScan}
+                  disabled={loadingBulkScan}
+                  className="text-xs font-bold text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl cursor-pointer flex items-center gap-1.5"
+                  title="Rescan database products"
+                >
+                  <RefreshCw className={`h-3 w-3 ${loadingBulkScan ? 'animate-spin' : ''}`} />
+                  Refresh Scan
+                </button>
+
+                {lastBulkSnapshotId && (
+                  <button
+                    type="button"
+                    disabled={rollingBackBulk}
+                    onClick={handleRollbackBulk}
+                    className="text-xs font-bold text-amber-400 hover:text-amber-300 bg-amber-950/60 border border-amber-800/80 px-3 py-1.5 rounded-xl cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {rollingBackBulk ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
+                    Rollback Last Batch
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkColorModal(false)}
+                  className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold px-5 py-2.5 rounded-xl text-xs transition-colors cursor-pointer border border-zinc-800"
+                >
+                  Close
+                </button>
+
+                <button
+                  type="button"
+                  disabled={applyingBulk || selectedBulkIds.length === 0}
+                  onClick={handleApplyBulkColors}
+                  className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition-all cursor-pointer border-0 shadow-lg flex items-center gap-2 disabled:opacity-50"
+                >
+                  {applyingBulk ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-white" />
+                      <span>Applying to Database...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-white" />
+                      <span>Apply Detected Colors ({selectedBulkIds.length})</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </footer>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
