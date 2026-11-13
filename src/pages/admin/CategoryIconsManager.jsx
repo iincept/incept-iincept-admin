@@ -24,7 +24,8 @@ import {
   Headphones,
   Tv,
   Check,
-  ShieldCheck
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react';
 
 const DEFAULT_CATEGORY_GROUPS = [
