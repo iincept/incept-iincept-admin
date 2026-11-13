@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+const rawApiUrl = (import.meta.env.VITE_API_URL || '/api').trim();
+const cleanApiUrl = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
+
 const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api'
+  baseURL: cleanApiUrl
 });
 
 // Request interceptor to automatically add admin authorization header
