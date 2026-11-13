@@ -343,8 +343,8 @@ export default function HeroBanners() {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size exceeds the 10MB limit. Please upload a smaller image.');
+    if (file.size > 20 * 1024 * 1024) {
+      alert('File size exceeds the 20MB limit. Please upload a smaller image.');
       return;
     }
 

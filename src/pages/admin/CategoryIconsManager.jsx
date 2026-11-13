@@ -106,6 +106,21 @@ const DEFAULT_CATEGORY_GROUPS = [
     ]
   },
   {
+    categoryKey: 'accessories',
+    categoryName: 'Accessories',
+    icon: Sparkles,
+    icons: [
+      { label: 'iPhone', path: '/accessories?product=iphone', query: 'iPhone', image: '/uploads/upload_1794292689853_322.png', price: 'Cases, MagSafe & Power', isActive: true },
+      { label: 'iPad', path: '/accessories?product=ipad', query: 'iPad', image: '/uploads/upload_1794292702660_545.png', price: 'Keyboards, Pencils & Folios', isActive: true },
+      { label: 'Mac', path: '/accessories?product=mac', query: 'Mac', image: '/uploads/upload_1794293051487_815.png', price: 'Mice, Keyboards & Docks', isActive: true },
+      { label: 'Apple Watch', path: '/accessories?product=watch', query: 'Watch', image: '/uploads/upload_1794292728655_907.png', price: 'Bands & Chargers', isActive: true },
+      { label: 'AirPods', path: '/accessories?product=airpods', query: 'AirPods', image: '/uploads/upload_1794292736726_552.png', price: 'Cases & Lanyards', isActive: true },
+      { label: 'Home', path: '/accessories?product=home', query: 'Home', image: '/uploads/upload_1794292742147_25.png', price: 'Audio & Remotes', isActive: true },
+      { label: 'AirTag', path: '/accessories?product=airtag', query: 'AirTag', image: '/uploads/upload_1794292747643_181.png', price: 'Straps & Key Rings', isActive: true },
+      { label: 'Beats', path: '/accessories?product=beats', query: 'Beats', image: '/uploads/upload_1794292752316_305.png', price: 'Headphones & Earbuds', isActive: true }
+    ]
+  },
+  {
     categoryKey: 'applecare',
     categoryName: 'AppleCare Category',
     icon: ShieldCheck,
