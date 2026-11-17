@@ -890,309 +890,314 @@ export default function Products() {
     setLoading(true);
     setError(null);
 
-    // Ensure we have at least one variant if none are specified
-    let finalVariants = [...(productForm.variants || [])];
-    if (finalVariants.length === 0) {
-      const fallbackColor = productForm.colors?.[0]?.name || productForm.colors?.[0] || 'Standard';
-      finalVariants = [{
-        size: productForm.sizes?.[0] || 'Standard',
-        color: fallbackColor,
-        colorHex: resolveColorHex(fallbackColor),
-        price: Number(productForm.price || 0),
-        discountPrice: Number(productForm.discountPrice || 0),
-        stock: Number(productForm.stock || 0),
-        sku: `PRO-${Date.now().toString().slice(-4)}`,
-        images: productForm.images || []
-      }];
-    }
+    try {
+      // Determine category context (watch, wearable, band, accessories)
+      const selectedCatObj = categories.find(c => c._id === productForm.category || c.slug === productForm.category || c.name === productForm.category);
+      const selectedCatSlug = (selectedCatObj?.slug || selectedCatObj?.name || productForm.category || '').toString().toLowerCase();
+      const isWatchCategory = selectedCatSlug.includes('watch') || selectedCatSlug.includes('wearable');
+      const isWatchBand = checkIsWatchBand(productForm, selectedCatSlug);
 
-    finalVariants = finalVariants.map(v => ({
-      ...v,
-      colorHex: (v.colorHex && isValidHex(v.colorHex)) ? normalizeHex(v.colorHex) : resolveColorHex(v.color || '')
-    }));
+      // Ensure we have at least one variant if none are specified
+      let finalVariants = [...(productForm.variants || [])];
+      if (finalVariants.length === 0) {
+        const fallbackColor = productForm.colors?.[0]?.name || productForm.colors?.[0] || 'Standard';
+        finalVariants = [{
+          size: productForm.sizes?.[0] || 'Standard',
+          color: fallbackColor,
+          colorHex: resolveColorHex(fallbackColor),
+          price: Number(productForm.price || 0),
+          discountPrice: Number(productForm.discountPrice || 0),
+          stock: Number(productForm.stock || 0),
+          sku: `PRO-${Date.now().toString().slice(-4)}`,
+          images: productForm.images || []
+        }];
+      }
 
-    const variantColors = [];
-    const variantSizes = [];
-    const variantAccessoriesSizes = [];
-    const variantBandSizes = [];
-    const variantStrapSizes = [];
-    const variantConnectivities = [];
-    const variantGlasses = [];
-    const variantStorage = [];
-    const variantRam = [];
-    const variantProcessors = [];
-
-    finalVariants.forEach(v => {
-      if (v.color && !variantColors.find(c => (c.name || c) === v.color)) {
-        const hex = v.colorHex || resolveColorHex(v.color);
-        variantColors.push({ name: v.color, value: hex, colorHex: hex, images: v.images || [] });
-      }
-      if (v.size && !variantSizes.includes(v.size)) {
-        variantSizes.push(v.size);
-      }
-      if (v.accessoriesSize && v.accessoriesSize !== 'None' && !variantAccessoriesSizes.includes(v.accessoriesSize)) {
-        variantAccessoriesSizes.push(v.accessoriesSize);
-      }
-      if (v.bandSize && !variantBandSizes.includes(v.bandSize)) {
-        variantBandSizes.push(v.bandSize);
-      }
-      if (v.strapSize && !variantStrapSizes.includes(v.strapSize)) {
-        variantStrapSizes.push(v.strapSize);
-      }
-      if (v.connectivity && !variantConnectivities.includes(v.connectivity)) {
-        variantConnectivities.push(v.connectivity);
-      }
-      if (v.glass && !variantGlasses.includes(v.glass)) {
-        variantGlasses.push(v.glass);
-      }
-      if (v.storage && !variantStorage.includes(v.storage)) {
-        variantStorage.push(v.storage);
-      }
-      if (v.ram && !variantRam.includes(v.ram)) {
-        variantRam.push(v.ram);
-      }
-      if ((v.processor || v.chip) && !variantProcessors.includes(v.processor || v.chip)) {
-        variantProcessors.push(v.processor || v.chip);
-      }
-    });
-
-    // Combine manual tag inputs and variant-extracted configurations
-    const finalColors = [...(productForm.colors || [])];
-    variantColors.forEach(vc => {
-      const vcName = (typeof vc === 'object' ? vc.name : vc).trim().toLowerCase();
-      const existingIdx = finalColors.findIndex(c => (typeof c === 'object' ? (c.name || '') : c).trim().toLowerCase() === vcName);
-      if (existingIdx === -1) {
-        finalColors.push(vc);
-      } else {
-        const existing = finalColors[existingIdx];
-        finalColors[existingIdx] = typeof existing === 'object'
-          ? { ...existing, colorHex: vc.colorHex || existing.colorHex, value: vc.colorHex || existing.value || existing.colorHex }
-          : { name: existing, colorHex: vc.colorHex, value: vc.colorHex };
-      }
-    });
-
-    finalVariants = finalVariants.map(v => {
-      const vColorName = (v.color || '').trim().toLowerCase();
-      const matchedColor = finalColors.find(c => (typeof c === 'object' ? (c.name || '') : c).trim().toLowerCase() === vColorName);
-      const hexFromColor = typeof matchedColor === 'object' ? (matchedColor.colorHex || matchedColor.value) : null;
-      return {
+      finalVariants = finalVariants.map(v => ({
         ...v,
-        colorHex: (v.colorHex && isValidHex(v.colorHex))
-          ? normalizeHex(v.colorHex)
-          : (hexFromColor && isValidHex(hexFromColor))
-            ? normalizeHex(hexFromColor)
-            : resolveColorHex(v.color || '')
-      };
-    });
+        colorHex: (v.colorHex && isValidHex(v.colorHex)) ? normalizeHex(v.colorHex) : resolveColorHex(v.color || '')
+      }));
 
-    const finalSizes = [...(productForm.sizes || [])];
-    variantSizes.forEach(vs => {
-      if (!finalSizes.includes(vs)) finalSizes.push(vs);
-    });
+      const variantColors = [];
+      const variantSizes = [];
+      const variantAccessoriesSizes = [];
+      const variantBandSizes = [];
+      const variantStrapSizes = [];
+      const variantConnectivities = [];
+      const variantGlasses = [];
+      const variantStorage = [];
+      const variantRam = [];
+      const variantProcessors = [];
 
-    const finalBandSizes = [...(productForm.bandSizes || [])];
-    variantBandSizes.forEach(vb => {
-      if (!finalBandSizes.includes(vb)) finalBandSizes.push(vb);
-    });
-
-    const finalStrapSizes = [...(productForm.strapSizes || [])];
-    variantStrapSizes.forEach(vs => {
-      if (!finalStrapSizes.includes(vs)) finalStrapSizes.push(vs);
-    });
-
-    const finalConnectivities = [];
-    [...(productForm.connectivities || []), ...variantConnectivities].forEach(vc => {
-      const trimmed = (vc || '').toString().trim();
-      if (!trimmed) return;
-      if (!finalConnectivities.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
-        let label = trimmed;
-        if (trimmed.toLowerCase() === 'wi-fi' || trimmed.toLowerCase() === 'wifi') label = 'Wi-Fi';
-        else if (trimmed.toLowerCase() === 'wi-fi + cellular' || trimmed.toLowerCase() === 'wifi + cellular') label = 'Wi-Fi + Cellular';
-        finalConnectivities.push(label);
-      }
-    });
-
-    const finalGlasses = [];
-    [...(productForm.glasses || []), ...variantGlasses].forEach(vg => {
-      const trimmed = (vg || '').toString().trim();
-      if (!trimmed) return;
-      if (!finalGlasses.some(g => g.toLowerCase() === trimmed.toLowerCase())) {
-        let label = trimmed;
-        if (trimmed.toLowerCase() === 'standard glass') label = 'Standard glass';
-        else if (trimmed.toLowerCase() === 'nano-texture glass' || trimmed.toLowerCase() === 'nanotexture glass') label = 'Nano-texture glass';
-        finalGlasses.push(label);
-      }
-    });
-
-    const finalStorage = [...(productForm.storage || [])];
-    variantStorage.forEach(vt => {
-      if (!finalStorage.includes(vt)) finalStorage.push(vt);
-    });
-
-    const finalRam = [...(productForm.ram || [])];
-    variantRam.forEach(vr => {
-      if (!finalRam.includes(vr)) finalRam.push(vr);
-    });
-
-    const finalProcessors = [...(productForm.processors || [])];
-    variantProcessors.forEach(vp => {
-      if (!finalProcessors.includes(vp)) finalProcessors.push(vp);
-    });
-
-    const inputDisc = Number(productForm.discountPrice || 0);
-    const parentPrice = Number(productForm.price || 0);
-    let calcPercent = 0;
-    if (inputDisc > 0 && inputDisc <= 99) {
-      calcPercent = Math.round(inputDisc);
-    } else if (inputDisc > 99 && parentPrice > inputDisc) {
-      calcPercent = Math.round(((parentPrice - inputDisc) / parentPrice) * 100);
-    }
-
-    const finalVariantsWithPrice = finalVariants.map(v => {
-      const vPrice = Number(v.price || parentPrice || 0);
-      let rawDiscInput = (v.discountInput !== undefined && v.discountInput !== null && v.discountInput !== "")
-        ? v.discountInput
-        : (v.discountPercent !== undefined && v.discountPercent !== null && v.discountPercent !== ""
-          ? v.discountPercent
-          : (v.discount !== undefined && v.discount !== null && v.discount !== "" ? v.discount : ""));
-
-      // Fall back to top-level parent discount if variant does not have an explicit discount
-      if ((rawDiscInput === "" || rawDiscInput === null || rawDiscInput === undefined) && inputDisc > 0) {
-        rawDiscInput = inputDisc;
-      }
-
-      const vDiscRaw = (rawDiscInput !== "" && rawDiscInput !== undefined && rawDiscInput !== null) ? Number(rawDiscInput) : 0;
-      let vDiscPrice = 0;
-      let vDiscPercent = 0;
-
-      if (vDiscRaw > 0 && vDiscRaw <= 99) {
-        vDiscPercent = Math.round(vDiscRaw);
-        vDiscPrice = vPrice > 0 ? Math.round(vPrice - (vPrice * vDiscRaw / 100)) : vDiscRaw;
-      } else if (vDiscRaw > 99 && vPrice > vDiscRaw) {
-        if (vDiscRaw < (vPrice / 2)) {
-          vDiscPrice = vPrice - vDiscRaw;
-          vDiscPercent = Math.round((vDiscRaw / vPrice) * 100);
-        } else {
-          vDiscPrice = vDiscRaw;
-          vDiscPercent = Math.round(((vPrice - vDiscRaw) / vPrice) * 100);
+      finalVariants.forEach(v => {
+        if (v.color && !variantColors.find(c => (c.name || c) === v.color)) {
+          const hex = v.colorHex || resolveColorHex(v.color);
+          variantColors.push({ name: v.color, value: hex, colorHex: hex, images: v.images || [] });
         }
-      } else {
-        vDiscPercent = 0;
-        vDiscPrice = 0;
+        if (v.size && !variantSizes.includes(v.size)) {
+          variantSizes.push(v.size);
+        }
+        if (v.accessoriesSize && v.accessoriesSize !== 'None' && !variantAccessoriesSizes.includes(v.accessoriesSize)) {
+          variantAccessoriesSizes.push(v.accessoriesSize);
+        }
+        if (v.bandSize && !variantBandSizes.includes(v.bandSize)) {
+          variantBandSizes.push(v.bandSize);
+        }
+        if (v.strapSize && !variantStrapSizes.includes(v.strapSize)) {
+          variantStrapSizes.push(v.strapSize);
+        }
+        if (v.connectivity && !variantConnectivities.includes(v.connectivity)) {
+          variantConnectivities.push(v.connectivity);
+        }
+        if (v.glass && !variantGlasses.includes(v.glass)) {
+          variantGlasses.push(v.glass);
+        }
+        if (v.storage && !variantStorage.includes(v.storage)) {
+          variantStorage.push(v.storage);
+        }
+        if (v.ram && !variantRam.includes(v.ram)) {
+          variantRam.push(v.ram);
+        }
+        if ((v.processor || v.chip) && !variantProcessors.includes(v.processor || v.chip)) {
+          variantProcessors.push(v.processor || v.chip);
+        }
+      });
+
+      // Combine manual tag inputs and variant-extracted configurations
+      const finalColors = [...(productForm.colors || [])];
+      variantColors.forEach(vc => {
+        const vcName = (typeof vc === 'object' ? vc.name : vc).trim().toLowerCase();
+        const existingIdx = finalColors.findIndex(c => (typeof c === 'object' ? (c.name || '') : c).trim().toLowerCase() === vcName);
+        if (existingIdx === -1) {
+          finalColors.push(vc);
+        } else {
+          const existing = finalColors[existingIdx];
+          finalColors[existingIdx] = typeof existing === 'object'
+            ? { ...existing, colorHex: vc.colorHex || existing.colorHex, value: vc.colorHex || existing.value || existing.colorHex }
+            : { name: existing, colorHex: vc.colorHex, value: vc.colorHex };
+        }
+      });
+
+      finalVariants = finalVariants.map(v => {
+        const vColorName = (v.color || '').trim().toLowerCase();
+        const matchedColor = finalColors.find(c => (typeof c === 'object' ? (c.name || '') : c).trim().toLowerCase() === vColorName);
+        const hexFromColor = typeof matchedColor === 'object' ? (matchedColor.colorHex || matchedColor.value) : null;
+        return {
+          ...v,
+          colorHex: (v.colorHex && isValidHex(v.colorHex))
+            ? normalizeHex(v.colorHex)
+            : (hexFromColor && isValidHex(hexFromColor))
+              ? normalizeHex(hexFromColor)
+              : resolveColorHex(v.color || '')
+        };
+      });
+
+      const finalSizes = [...(productForm.sizes || [])];
+      variantSizes.forEach(vs => {
+        if (!finalSizes.includes(vs)) finalSizes.push(vs);
+      });
+
+      const finalBandSizes = [...(productForm.bandSizes || [])];
+      variantBandSizes.forEach(vb => {
+        if (!finalBandSizes.includes(vb)) finalBandSizes.push(vb);
+      });
+
+      const finalStrapSizes = [...(productForm.strapSizes || [])];
+      variantStrapSizes.forEach(vs => {
+        if (!finalStrapSizes.includes(vs)) finalStrapSizes.push(vs);
+      });
+
+      const finalConnectivities = [];
+      [...(productForm.connectivities || []), ...variantConnectivities].forEach(vc => {
+        const trimmed = (vc || '').toString().trim();
+        if (!trimmed) return;
+        if (!finalConnectivities.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
+          let label = trimmed;
+          if (trimmed.toLowerCase() === 'wi-fi' || trimmed.toLowerCase() === 'wifi') label = 'Wi-Fi';
+          else if (trimmed.toLowerCase() === 'wi-fi + cellular' || trimmed.toLowerCase() === 'wifi + cellular') label = 'Wi-Fi + Cellular';
+          finalConnectivities.push(label);
+        }
+      });
+
+      const finalGlasses = [];
+      [...(productForm.glasses || []), ...variantGlasses].forEach(vg => {
+        const trimmed = (vg || '').toString().trim();
+        if (!trimmed) return;
+        if (!finalGlasses.some(g => g.toLowerCase() === trimmed.toLowerCase())) {
+          let label = trimmed;
+          if (trimmed.toLowerCase() === 'standard glass') label = 'Standard glass';
+          else if (trimmed.toLowerCase() === 'nano-texture glass' || trimmed.toLowerCase() === 'nanotexture glass') label = 'Nano-texture glass';
+          finalGlasses.push(label);
+        }
+      });
+
+      const finalStorage = [...(productForm.storage || [])];
+      variantStorage.forEach(vt => {
+        if (!finalStorage.includes(vt)) finalStorage.push(vt);
+      });
+
+      const finalRam = [...(productForm.ram || [])];
+      variantRam.forEach(vr => {
+        if (!finalRam.includes(vr)) finalRam.push(vr);
+      });
+
+      const finalProcessors = [...(productForm.processors || [])];
+      variantProcessors.forEach(vp => {
+        if (!finalProcessors.includes(vp)) finalProcessors.push(vp);
+      });
+
+      const inputDisc = Number(productForm.discountPrice || 0);
+      const parentPrice = Number(productForm.price || 0);
+      let calcPercent = 0;
+      if (inputDisc > 0 && inputDisc <= 99) {
+        calcPercent = Math.round(inputDisc);
+      } else if (inputDisc > 99 && parentPrice > inputDisc) {
+        calcPercent = Math.round(((parentPrice - inputDisc) / parentPrice) * 100);
       }
 
-      const isKnownStrap = (val) => {
+      const finalVariantsWithPrice = finalVariants.map(v => {
+        const vPrice = Number(v.price || parentPrice || 0);
+        let rawDiscInput = (v.discountInput !== undefined && v.discountInput !== null && v.discountInput !== "")
+          ? v.discountInput
+          : (v.discountPercent !== undefined && v.discountPercent !== null && v.discountPercent !== ""
+            ? v.discountPercent
+            : (v.discount !== undefined && v.discount !== null && v.discount !== "" ? v.discount : ""));
+
+        // Fall back to top-level parent discount if variant does not have an explicit discount
+        if ((rawDiscInput === "" || rawDiscInput === null || rawDiscInput === undefined) && inputDisc > 0) {
+          rawDiscInput = inputDisc;
+        }
+
+        const vDiscRaw = (rawDiscInput !== "" && rawDiscInput !== undefined && rawDiscInput !== null) ? Number(rawDiscInput) : 0;
+        let vDiscPrice = 0;
+        let vDiscPercent = 0;
+
+        if (vDiscRaw > 0 && vDiscRaw <= 99) {
+          vDiscPercent = Math.round(vDiscRaw);
+          vDiscPrice = vPrice > 0 ? Math.round(vPrice - (vPrice * vDiscRaw / 100)) : vDiscRaw;
+        } else if (vDiscRaw > 99 && vPrice > vDiscRaw) {
+          if (vDiscRaw < (vPrice / 2)) {
+            vDiscPrice = vPrice - vDiscRaw;
+            vDiscPercent = Math.round((vDiscRaw / vPrice) * 100);
+          } else {
+            vDiscPrice = vDiscRaw;
+            vDiscPercent = Math.round(((vPrice - vDiscRaw) / vPrice) * 100);
+          }
+        } else {
+          vDiscPercent = 0;
+          vDiscPrice = 0;
+        }
+
+        const isKnownStrap = (val) => {
+          if (!val) return false;
+          const normVal = val.toString().trim().toLowerCase();
+          return WATCH_STRAP_SIZES.some(s => s.toLowerCase() === normVal) ||
+            finalStrapSizes.some(s => s.toLowerCase() === normVal);
+        };
+
+        const resolvedStrap = v.strapSize || (isKnownStrap(v.size) ? v.size : (v.accessoriesSize || ''));
+        const resolvedCase = isKnownStrap(v.caseSize) ? '' : (v.caseSize || (isKnownStrap(v.size) ? '' : (v.size || v.bandSize || '')));
+        const resolvedSize = (isWatchCategory || isWatchBand) ? resolvedCase : (isKnownStrap(v.size) ? '' : (v.size || ''));
+
+        const vCopy = {
+          ...v,
+          caseSize: resolvedCase,
+          bandSize: resolvedCase,
+          strapSize: resolvedStrap,
+          size: resolvedSize,
+          accessoriesSize: resolvedStrap || v.accessoriesSize || '',
+          price: vPrice,
+          discountPrice: vDiscPrice,
+          discountPercent: vDiscPercent,
+          discount: vDiscPercent || (vDiscRaw > 0 ? vDiscRaw : 0),
+          discountInput: vDiscRaw > 0 ? vDiscRaw : "",
+          stock: Number(v.stock !== undefined && v.stock !== '' ? v.stock : (productForm.stock || 0))
+        };
+        if (vCopy._id && !/^[0-9a-fA-F]{24}$/.test(String(vCopy._id))) {
+          delete vCopy._id;
+        }
+        return vCopy;
+      });
+
+      const validVariantDiscPrices = finalVariantsWithPrice
+        .filter(v => Number(v.discountPrice) > 0 && Number(v.discountPrice) < Number(v.price))
+        .map(v => Number(v.discountPrice));
+      const validVariantDiscPercents = finalVariantsWithPrice
+        .filter(v => Number(v.discountPercent) > 0)
+        .map(v => Number(v.discountPercent));
+
+      let finalParentDiscPrice = 0;
+      let finalParentDiscPercent = 0;
+
+      if (validVariantDiscPrices.length > 0) {
+        finalParentDiscPrice = Math.min(...validVariantDiscPrices);
+        finalParentDiscPercent = Math.max(...validVariantDiscPercents);
+      } else if (inputDisc > 0) {
+        finalParentDiscPercent = calcPercent;
+        finalParentDiscPrice = inputDisc <= 99 ? Math.round(parentPrice - (parentPrice * inputDisc / 100)) : inputDisc;
+      } else {
+        finalParentDiscPrice = 0;
+        finalParentDiscPercent = 0;
+      }
+
+      const isKnownStrapVal = (val) => {
         if (!val) return false;
         const normVal = val.toString().trim().toLowerCase();
         return WATCH_STRAP_SIZES.some(s => s.toLowerCase() === normVal) ||
           finalStrapSizes.some(s => s.toLowerCase() === normVal);
       };
+      const cleanCaseSizes = finalBandSizes.filter(s => !isKnownStrapVal(s));
+      const cleanGenSizes = finalSizes.filter(s => !isKnownStrapVal(s));
 
-      const resolvedStrap = v.strapSize || (isKnownStrap(v.size) ? v.size : (v.accessoriesSize || ''));
-      const resolvedCase = isKnownStrap(v.caseSize) ? '' : (v.caseSize || (isKnownStrap(v.size) ? '' : (v.size || v.bandSize || '')));
-      const resolvedSize = (isWatchCategory || isWatchBand) ? resolvedCase : (isKnownStrap(v.size) ? '' : (v.size || ''));
-
-      const vCopy = {
-        ...v,
-        caseSize: resolvedCase,
-        bandSize: resolvedCase,
-        strapSize: resolvedStrap,
-        size: resolvedSize,
-        accessoriesSize: resolvedStrap || v.accessoriesSize || '',
-        price: vPrice,
-        discountPrice: vDiscPrice,
-        discountPercent: vDiscPercent,
-        discount: vDiscPercent || (vDiscRaw > 0 ? vDiscRaw : 0),
-        discountInput: vDiscRaw > 0 ? vDiscRaw : "",
-        stock: Number(v.stock !== undefined && v.stock !== '' ? v.stock : (productForm.stock || 0))
+      const formattedProduct = {
+        ...productForm,
+        price: Number(productForm.price || finalVariantsWithPrice[0]?.price || 0),
+        discountPrice: finalParentDiscPrice,
+        discountPercent: finalParentDiscPercent,
+        discount: finalParentDiscPercent,
+        stock: finalVariantsWithPrice.reduce((acc, v) => acc + Number(v.stock || 0), 0),
+        sizes: cleanCaseSizes.length > 0 ? cleanCaseSizes : cleanGenSizes,
+        caseSizes: cleanCaseSizes,
+        bandSizes: cleanCaseSizes,
+        strapSizes: finalStrapSizes,
+        accessoriesSizes: finalStrapSizes.length > 0 ? finalStrapSizes : (variantAccessoriesSizes.length > 0 ? variantAccessoriesSizes : []),
+        connectivities: finalConnectivities,
+        glasses: finalGlasses,
+        colors: finalColors,
+        storage: finalStorage,
+        ram: finalRam,
+        processors: finalProcessors,
+        variants: finalVariantsWithPrice,
+        displayImage: productForm.displayImage || (finalVariantsWithPrice[0]?.images?.[0]) || '',
+        colorImages: productForm.colorImages || {}
       };
-      if (vCopy._id && !/^[0-9a-fA-F]{24}$/.test(String(vCopy._id))) {
-        delete vCopy._id;
+
+      // Auto-populate top-level images from all variant images
+      const allImages = [];
+      if (productForm.displayImage && !allImages.includes(productForm.displayImage)) {
+        allImages.push(productForm.displayImage);
       }
-      return vCopy;
-    });
-
-    const validVariantDiscPrices = finalVariantsWithPrice
-      .filter(v => Number(v.discountPrice) > 0 && Number(v.discountPrice) < Number(v.price))
-      .map(v => Number(v.discountPrice));
-    const validVariantDiscPercents = finalVariantsWithPrice
-      .filter(v => Number(v.discountPercent) > 0)
-      .map(v => Number(v.discountPercent));
-
-    let finalParentDiscPrice = 0;
-    let finalParentDiscPercent = 0;
-
-    if (validVariantDiscPrices.length > 0) {
-      finalParentDiscPrice = Math.min(...validVariantDiscPrices);
-      finalParentDiscPercent = Math.max(...validVariantDiscPercents);
-    } else if (inputDisc > 0) {
-      finalParentDiscPercent = calcPercent;
-      finalParentDiscPrice = inputDisc <= 99 ? Math.round(parentPrice - (parentPrice * inputDisc / 100)) : inputDisc;
-    } else {
-      finalParentDiscPrice = 0;
-      finalParentDiscPercent = 0;
-    }
-
-    const isKnownStrapVal = (val) => {
-      if (!val) return false;
-      const normVal = val.toString().trim().toLowerCase();
-      return WATCH_STRAP_SIZES.some(s => s.toLowerCase() === normVal) ||
-        finalStrapSizes.some(s => s.toLowerCase() === normVal);
-    };
-    const cleanCaseSizes = finalBandSizes.filter(s => !isKnownStrapVal(s));
-    const cleanGenSizes = finalSizes.filter(s => !isKnownStrapVal(s));
-
-    const formattedProduct = {
-      ...productForm,
-      price: Number(productForm.price || finalVariantsWithPrice[0]?.price || 0),
-      discountPrice: finalParentDiscPrice,
-      discountPercent: finalParentDiscPercent,
-      discount: finalParentDiscPercent,
-      stock: finalVariantsWithPrice.reduce((acc, v) => acc + Number(v.stock || 0), 0),
-      sizes: cleanCaseSizes.length > 0 ? cleanCaseSizes : cleanGenSizes,
-      caseSizes: cleanCaseSizes,
-      bandSizes: cleanCaseSizes,
-      strapSizes: finalStrapSizes,
-      accessoriesSizes: finalStrapSizes.length > 0 ? finalStrapSizes : (variantAccessoriesSizes.length > 0 ? variantAccessoriesSizes : []),
-      bandSizes: finalBandSizes,
-      strapSizes: finalStrapSizes,
-      connectivities: finalConnectivities,
-      glasses: finalGlasses,
-      colors: finalColors,
-      storage: finalStorage,
-      ram: finalRam,
-      processors: finalProcessors,
-      variants: finalVariantsWithPrice,
-      displayImage: productForm.displayImage || (finalVariantsWithPrice[0]?.images?.[0]) || '',
-      colorImages: productForm.colorImages || {}
-    };
-
-    // Auto-populate top-level images from all variant images
-    const allImages = [];
-    if (productForm.displayImage && !allImages.includes(productForm.displayImage)) {
-      allImages.push(productForm.displayImage);
-    }
-    if (productForm.images && productForm.images.length > 0) {
-      productForm.images.forEach(img => {
-        if (!allImages.includes(img)) allImages.push(img);
-      });
-    }
-    finalVariants.forEach(v => {
-      if (v.images) {
-        v.images.forEach(img => {
+      if (productForm.images && productForm.images.length > 0) {
+        productForm.images.forEach(img => {
           if (!allImages.includes(img)) allImages.push(img);
         });
       }
-    });
-    formattedProduct.images = allImages;
+      finalVariants.forEach(v => {
+        if (v.images) {
+          v.images.forEach(img => {
+            if (!allImages.includes(img)) allImages.push(img);
+          });
+        }
+      });
+      formattedProduct.images = allImages;
 
-    if (formattedProduct.images.length === 0) {
-      setError('Please upload at least one product image, display image, or variant image');
-      setLoading(false);
-      return;
-    }
+      if (formattedProduct.images.length === 0) {
+        setError('Please upload at least one product image, display image, or variant image');
+        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+        setLoading(false);
+        return;
+      }
 
-    try {
       if (editProductId) {
         await updateProduct(editProductId, formattedProduct);
         showSuccessMessage('Product updated successfully!');
@@ -1205,7 +1210,12 @@ export default function Products() {
       resetProductForm();
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Product operation failed');
+      const errMsg = err.response?.data?.message || err.message || 'Product operation failed';
+      setError(errMsg);
+      console.error('Product submit error:', err);
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     } finally {
       setLoading(false);
     }
@@ -1972,6 +1982,20 @@ export default function Products() {
       ) : (
         // Add / Edit Product Form UI matching screenshot layout
         <div className="bg-[#f8fafc] min-h-screen -m-6 sm:-m-8 md:-m-10 p-6 sm:p-8 font-sans">
+
+          {/* Form error banner */}
+          {error && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-2xl mb-6 flex items-start gap-3 text-sm text-left shadow-sm">
+              <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Operation Error</p>
+                <p className="text-rose-600 mt-0.5">{error}</p>
+              </div>
+              <button onClick={() => setError(null)} className="ml-auto text-rose-400 hover:text-rose-600 cursor-pointer border-0 bg-transparent">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
 
           {/* Header Row */}
           <div className="w-full flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 text-left border-b border-zinc-200 pb-5">
