@@ -70,9 +70,9 @@ const DEFAULT_CATEGORY_GROUPS = [
       { label: 'iPad', path: '/ipad?search=iPad', query: 'iPad', image: '/ipad_nav/ipad.png', price: 'From ₹34,900', isActive: true },
       { label: 'iPad mini', path: '/ipad?search=iPad mini', query: 'iPad mini', image: '/ipad_nav/ipad_mini.png', price: 'From ₹49,900', isActive: true },
       { label: 'Compare', path: '/compare?category=ipad', query: 'Compare', image: '/ipad_nav/ipad_compare.png', price: 'Compare Specs', isActive: true },
-      { label: 'Apple Pencil', path: '/accessories?search=Pencil', query: 'Pencil', image: '/ipad_nav/apple_pencil.png', price: 'From ₹11,900', isActive: true },
-      { label: 'Keyboards', path: '/accessories?search=Keyboard', query: 'Keyboard', image: '/ipad_nav/keyboards.png', price: 'Magic Keyboard', isActive: true },
-      { label: 'Accessories', path: '/accessories', query: 'Accessories', image: '/ipad_nav/accessories.png', price: 'Cases & Covers', isActive: true }
+      { label: 'Apple Pencil', path: '/ipad?search=Pencil', query: 'Pencil', image: '/ipad_nav/apple_pencil.png', price: 'From ₹11,900', isActive: true },
+      { label: 'Keyboards', path: '/ipad?search=Keyboard', query: 'Keyboard', image: '/ipad_nav/keyboards.png', price: 'Magic Keyboard', isActive: true },
+      { label: 'Accessories', path: '/ipad?search=Accessories', query: 'Accessories', image: '/ipad_nav/accessories.png', price: 'Cases & Covers', isActive: true }
     ]
   },
   {
@@ -166,26 +166,8 @@ export default function CategoryIconsManager() {
             }
           });
           setGroups(fetchedGroups);
-        } else if (response.data.navbarMenuItems && response.data.navbarMenuItems.length > 0) {
-          // Sync existing navbarMenuItems dropdownItems into categoryIconGroups structure
-          const synced = DEFAULT_CATEGORY_GROUPS.map(def => {
-            const matchedNav = response.data.navbarMenuItems.find(i => (i.name || '').toLowerCase().includes(def.categoryKey.replace('-home', '')));
-            if (matchedNav && matchedNav.dropdownItems && matchedNav.dropdownItems.length > 0) {
-              return {
-                ...def,
-                icons: matchedNav.dropdownItems.map(d => ({
-                  label: d.label,
-                  path: d.path,
-                  query: d.query || d.label,
-                  image: d.image || '',
-                  price: d.price || '',
-                  isActive: d.isActive !== false
-                }))
-              };
-            }
-            return def;
-          });
-          setGroups(synced);
+        } else {
+          setGroups(DEFAULT_CATEGORY_GROUPS);
         }
       }
     } catch (err) {
@@ -199,33 +181,8 @@ export default function CategoryIconsManager() {
     setSaving(true);
     setError(null);
     try {
-      // 1. Save to categoryIconGroups
-      // 2. Also sync back to navbarMenuItems dropdownItems so Header Mega Dropdown & Category pages remain 100% in sync
-      const response = await axiosClient.get('/settings');
-      let navItems = response.data?.navbarMenuItems || [];
-
-      const updatedNavItems = navItems.map(nav => {
-        const lowerName = (nav.name || '').toLowerCase();
-        const matchedGroup = groups.find(g => lowerName.includes(g.categoryKey.replace('-home', '')) || lowerName.includes(g.categoryName.toLowerCase()));
-        if (matchedGroup) {
-          return {
-            ...nav,
-            dropdownItems: matchedGroup.icons.map(ic => ({
-              label: ic.label,
-              path: ic.path,
-              query: ic.query || ic.label,
-              image: ic.image || '',
-              price: ic.price || '',
-              isActive: ic.isActive !== false
-            }))
-          };
-        }
-        return nav;
-      });
-
       await axiosClient.put('/settings', {
-        categoryIconGroups: groups,
-        navbarMenuItems: updatedNavItems
+        categoryIconGroups: groups
       });
       notifyAdminChange('categories', { action: 'update_category_icons' });
 
